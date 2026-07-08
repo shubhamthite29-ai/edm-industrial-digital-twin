@@ -1,0 +1,48 @@
+{
+  "name": "edm-industrial-digital-twin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc -b && vite build",
+    "build:github": "tsc -b && vite build --mode github-pages",
+    "preview": "vite preview --host 0.0.0.0 --port 5173 --strictPort",
+    "lan": "powershell -ExecutionPolicy Bypass -File scripts/start-lan-preview.ps1",
+    "serve:forever": "powershell -ExecutionPolicy Bypass -File scripts/start-forever-server.ps1",
+    "tunnel": "powershell -ExecutionPolicy Bypass -File scripts/start-public-tunnel.ps1",
+    "tunnel:cloudflare": "powershell -ExecutionPolicy Bypass -File scripts/start-cloudflare-tunnel.ps1",
+    "start:all": "powershell -ExecutionPolicy Bypass -File scripts/start-all.ps1",
+    "typecheck": "tsc -b",
+    "lint": "tsc -b"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "framer-motion": "^11.18.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.2",
+    "react-router-dom": "^7.1.1",
+    "recharts": "^2.15.0",
+    "three": "^0.185.1",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@types/three": "^0.185.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5"
+  }
+}
