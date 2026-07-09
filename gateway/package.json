@@ -1,0 +1,17 @@
+{
+  "name": "edm-digital-twin-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight WebSocket gateway for the EDM Digital Twin React dashboard and Unity 6 editor.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
