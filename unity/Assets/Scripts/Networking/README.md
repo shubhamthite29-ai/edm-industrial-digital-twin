@@ -9,6 +9,9 @@ Assets/Scripts/Networking/
   WebSocketClient.cs
   MessageModels.cs
   MachineManager.cs
+Assets/Scripts/Machine/
+  MachineParameters.cs
+  MachineParameterManager.cs
 ```
 
 ## Dependency
@@ -26,7 +29,8 @@ https://github.com/endel/NativeWebSocket.git#upm
 1. Create an empty GameObject named `DigitalTwinNetworking`.
 2. Add `WebSocketClient`.
 3. Add `MachineManager` to the same GameObject or assign an existing `MachineManager` reference.
-4. Set `Gateway Url`.
+4. Add `MachineParameterManager` to the same GameObject or assign an existing `MachineParameterManager` reference.
+5. Set `Gateway Url`.
 
 Default:
 
@@ -101,3 +105,24 @@ That sends:
 ```
 
 No existing machine animation, spark, tank, or tool behavior should be changed.
+
+## Parameter Synchronization
+
+When Unity receives:
+
+```json
+{
+  "type": "machine.parameters.patch",
+  "payload": {
+    "currentA": 18,
+    "voltageV": 90,
+    "gapVoltageV": 72,
+    "pulseOnUs": 150,
+    "pulseOffUs": 45
+  }
+}
+```
+
+`WebSocketClient` forwards the packet to `MachineParameterManager`, which updates the shared `MachineParameters` object.
+
+Other Unity scripts should read from `MachineParameterManager.Current` instead of reading WebSocket messages directly.

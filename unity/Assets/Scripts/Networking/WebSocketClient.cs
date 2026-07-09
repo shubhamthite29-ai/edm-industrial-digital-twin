@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Text;
+using EDMDigitalTwin.Machine;
 using NativeWebSocket;
 using UnityEngine;
 
@@ -15,6 +16,7 @@ namespace EDMDigitalTwin.Networking
 
         [Header("Runtime")]
         [SerializeField] private MachineManager machineManager;
+        [SerializeField] private MachineParameterManager machineParameterManager;
         [SerializeField] private float reconnectDelaySeconds = 2f;
         [SerializeField] private float heartbeatIntervalSeconds = 10f;
         [SerializeField] private bool verboseLogging = true;
@@ -37,6 +39,11 @@ namespace EDMDigitalTwin.Networking
             if (machineManager == null)
             {
                 machineManager = FindFirstObjectByType<MachineManager>();
+            }
+
+            if (machineParameterManager == null)
+            {
+                machineParameterManager = FindFirstObjectByType<MachineParameterManager>();
             }
         }
 
@@ -207,6 +214,12 @@ namespace EDMDigitalTwin.Networking
                 return;
             }
 
+            if (message.type == GatewayMessageTypes.MachineParametersPatch)
+            {
+                GetMachineParameterManager()?.ApplyPatchJson(json);
+                return;
+            }
+
             if (message.type == GatewayMessageTypes.Ack || message.type == GatewayMessageTypes.Heartbeat)
             {
                 return;
@@ -255,6 +268,21 @@ namespace EDMDigitalTwin.Networking
             }
 
             return machineManager;
+        }
+
+        private MachineParameterManager GetMachineParameterManager()
+        {
+            if (machineParameterManager == null)
+            {
+                machineParameterManager = FindFirstObjectByType<MachineParameterManager>();
+            }
+
+            if (machineParameterManager == null)
+            {
+                Debug.LogWarning("MachineParameterManager is missing. Add MachineParameterManager to a scene object.");
+            }
+
+            return machineParameterManager;
         }
 
         private IEnumerator HeartbeatLoop()

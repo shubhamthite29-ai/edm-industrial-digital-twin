@@ -8,6 +8,7 @@ namespace EDMDigitalTwin.Networking
         public const string ClientHello = "client.hello";
         public const string Heartbeat = "heartbeat";
         public const string MachineCommand = "machine.command";
+        public const string MachineParametersPatch = "machine.parameters.patch";
         public const string UnityState = "unity.state";
         public const string Ack = "ack";
         public const string Error = "error";

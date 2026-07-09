@@ -44,6 +44,7 @@ import { sensors, sensorGroups } from "../data/sensors";
 import { useInterval } from "../hooks/useInterval";
 import { compareWhatIf } from "../services/edmCalculations";
 import { initializeLiveUnityService, startLiveMachining, stopLiveMachining } from "../services/liveUnityService";
+import { machineParameterService } from "../Machine/MachineParameterService";
 import { useTwinStore } from "../store/useTwinStore";
 import type { ConnectionStatus, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
 
@@ -260,6 +261,7 @@ function MachineView() {
 
 function MachineControl() {
   const [confirming, setConfirming] = useState(false);
+  const dataMode = useTwinStore((state) => state.dataMode);
   const parameters = useTwinStore((state) => state.parameters);
   const pending = useTwinStore((state) => state.pendingParameters);
   const elapsedSeconds = useTwinStore((state) => state.elapsedSeconds);
@@ -334,6 +336,9 @@ function MachineControl() {
                 <button
                   className="rounded bg-plant-cyan px-4 py-2 text-sm font-semibold uppercase text-plant-void"
                   onClick={() => {
+                    if (dataMode === "live-unity") {
+                      machineParameterService.applyParameters(pending);
+                    }
                     applyToTwin();
                     setConfirming(false);
                   }}
