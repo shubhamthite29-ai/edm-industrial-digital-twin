@@ -9,6 +9,7 @@ namespace EDMDigitalTwin.Networking
         public const string Heartbeat = "heartbeat";
         public const string MachineCommand = "machine.command";
         public const string MachineParametersPatch = "machine.parameters.patch";
+        public const string CameraCommand = "camera.command";
         public const string UnityState = "unity.state";
         public const string Ack = "ack";
         public const string Error = "error";
@@ -31,6 +32,7 @@ namespace EDMDigitalTwin.Networking
         public string role;
         public string command;
         public string status;
+        public string view;
         public string messageId;
         public string detail;
         public string code;

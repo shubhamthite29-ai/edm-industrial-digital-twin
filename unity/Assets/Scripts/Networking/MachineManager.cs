@@ -1,4 +1,5 @@
 using UnityEngine;
+using EDMDigitalTwin.Machine;
 
 namespace EDMDigitalTwin.Networking
 {
@@ -7,8 +8,10 @@ namespace EDMDigitalTwin.Networking
         public MachineController machineController;
 
         [SerializeField] private WebSocketClient webSocketClient;
+        [SerializeField] private MachineState currentState = MachineState.READY;
 
         public bool IsRunning { get; private set; }
+        public MachineState CurrentState => currentState;
 
         private void Awake()
         {
@@ -33,22 +36,52 @@ namespace EDMDigitalTwin.Networking
             }
 
             IsRunning = true;
-            SendUnityState("machining");
+            SetMachineState(MachineState.MACHINING);
+            MachineEvents.RaiseMachineStarted();
             machineController.StartMachining();
         }
 
         public void StopMachining()
         {
+            IsRunning = false;
+            SetMachineState(MachineState.RETRACTING);
             Debug.Log("Machine cycle stopped");
         }
 
         public void ResetMachine()
         {
+            IsRunning = false;
+            SetMachineState(MachineState.READY);
             Debug.Log("Machine reset requested");
+        }
+
+        public void HomeMachine()
+        {
+            IsRunning = false;
+            SetMachineState(MachineState.READY_TO_START);
+            Debug.Log("Machine home requested");
+        }
+
+        public void PauseMachining()
+        {
+            SetMachineState(MachineState.WAITING_FOR_PARAMETERS);
+            Debug.Log("Machine pause requested");
+        }
+
+        public void ResumeMachining()
+        {
+            if (IsRunning)
+            {
+                SetMachineState(MachineState.MACHINING);
+            }
+
+            Debug.Log("Machine resume requested");
         }
 
         public void EmergencyStop()
         {
+            IsRunning = false;
+            SetMachineState(MachineState.EMERGENCY_STOP);
             Debug.LogWarning("Emergency stop requested");
         }
 
@@ -60,7 +93,27 @@ namespace EDMDigitalTwin.Networking
             }
 
             IsRunning = false;
+            SetMachineState(MachineState.COMPLETED);
+            MachineEvents.RaiseMachineFinished();
             SendUnityState("idle");
+        }
+
+        public void PublishCurrentState()
+        {
+            SendUnityState(IsRunning ? "machining" : "idle");
+        }
+
+        private void SetMachineState(MachineState state)
+        {
+            if (currentState == state)
+            {
+                SendUnityState(IsRunning ? "machining" : "idle");
+                return;
+            }
+
+            currentState = state;
+            MachineEvents.RaiseStateChanged(state);
+            SendUnityState(IsRunning ? "machining" : "idle");
         }
 
         private void SendUnityState(string status)

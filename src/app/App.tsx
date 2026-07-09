@@ -43,10 +43,22 @@ import { StatusPill } from "../components/StatusPill";
 import { sensors, sensorGroups } from "../data/sensors";
 import { useInterval } from "../hooks/useInterval";
 import { compareWhatIf } from "../services/edmCalculations";
-import { initializeLiveUnityService, startLiveMachining, stopLiveMachining } from "../services/liveUnityService";
+import {
+  emergencyStopLiveMachine,
+  homeLiveMachine,
+  initializeLiveUnityService,
+  pauseLiveMachine,
+  pingGateway,
+  requestLiveStatus,
+  resetLiveMachine,
+  resumeLiveMachine,
+  setLiveCameraView,
+  startLiveMachining,
+  stopLiveMachining,
+} from "../services/liveUnityService";
 import { machineParameterService } from "../Machine/MachineParameterService";
 import { useTwinStore } from "../store/useTwinStore";
-import type { ConnectionStatus, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
+import type { CameraView, ConnectionStatus, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
 
 const modules = [
   { key: "dashboard", label: "Dashboard", icon: Gauge },
@@ -210,7 +222,7 @@ function LiveMetrics() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="Current" value={fmt(parameters.current, 1)} unit="A" tone="amber" sublabel="A2 discharge sensor" />
-      <MetricCard label="Gap Voltage" value={fmt(parameters.voltage, 0)} unit="V" tone="cyan" sublabel={metrics.gapState} />
+      <MetricCard label="Gap Voltage" value={fmt(parameters.gapVoltage, 0)} unit="V" tone="cyan" sublabel={metrics.gapState} />
       <MetricCard label="MRR" value={fmt(metrics.mrr, 2)} unit="mm3/min" tone="green" sublabel="Physics prediction" />
       <MetricCard label="Surface Ra" value={fmt(metrics.surfaceRoughness, 2)} unit="um" tone={metrics.surfaceRoughness > 3 ? "amber" : "cyan"} sublabel="Predicted finish" />
       <MetricCard label="Power" value={fmt(metrics.power, 2)} unit="kW" tone="violet" sublabel={`${fmt(metrics.dutyCycle, 1)}% duty cycle`} />
@@ -259,6 +271,78 @@ function MachineView() {
   );
 }
 
+function LiveCommandPanel() {
+  const dataMode = useTwinStore((state) => state.dataMode);
+  const connectionStatus = useTwinStore((state) => state.connectionStatus);
+  const machineState = useTwinStore((state) => state.machineState);
+  const telemetry = useTwinStore((state) => state.unityTelemetry);
+  const disabled = dataMode !== "live-unity" || connectionStatus !== "connected";
+
+  const commands = [
+    ["Start", startLiveMachining, "green"],
+    ["Stop", stopLiveMachining, "amber"],
+    ["Pause", pauseLiveMachine, "cyan"],
+    ["Resume", resumeLiveMachine, "green"],
+    ["Home", homeLiveMachine, "violet"],
+    ["Reset", resetLiveMachine, "cyan"],
+    ["Emergency Stop", emergencyStopLiveMachine, "red"],
+  ] as const;
+  const cameraViews: Array<[string, CameraView]> = [
+    ["Front", "front"],
+    ["Top", "top"],
+    ["Side", "side"],
+    ["Tool", "tool"],
+    ["Iso", "isometric"],
+    ["Free", "free"],
+  ];
+
+  return (
+    <Panel title="Live Unity Commands" eyebrow="Website controls Unity machine" accent="cyan">
+      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
+        <div className="flex flex-wrap gap-2">
+          {commands.map(([label, command, tone]) => (
+            <button
+              key={label}
+              className={`rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                tone === "red"
+                  ? "border-plant-red bg-plant-red/15 text-plant-red"
+                  : tone === "green"
+                    ? "border-plant-green bg-plant-green/15 text-plant-green"
+                    : tone === "amber"
+                      ? "border-plant-amber bg-plant-amber/15 text-plant-amber"
+                      : "border-plant-cyan bg-plant-cyan/15 text-plant-cyan"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+              disabled={disabled}
+              onClick={() => command()}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+          <div className="h-9 w-px bg-plant-line" />
+          {cameraViews.map(([label, view]) => (
+            <button
+              key={view}
+              className="rounded border border-plant-line px-3 py-2 text-xs font-semibold uppercase tracking-wide text-plant-muted transition hover:text-plant-text disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={disabled}
+              onClick={() => setLiveCameraView(view)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+          <StatusPill label={`State ${machineState}`} tone={machineState === "MACHINING" ? "green" : machineState === "EMERGENCY_STOP" || machineState === "FAULT" ? "red" : "cyan"} />
+          <StatusPill label={`Cycle ${fmt(telemetry.cyclePercent, 0)}%`} tone="amber" />
+          <StatusPill label={`Tool ${fmt(telemetry.toolPosition, 2)}`} tone="violet" />
+          <StatusPill label={`Spark ${telemetry.sparkActive ? "On" : "Off"}`} tone={telemetry.sparkActive ? "green" : "red"} />
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function MachineControl() {
   const [confirming, setConfirming] = useState(false);
   const dataMode = useTwinStore((state) => state.dataMode);
@@ -290,10 +374,12 @@ function MachineControl() {
       <div className="grid gap-3 xl:grid-cols-2">
         <ParameterStepper id="voltage" label="Voltage" unit="V" min={40} max={160} step={1} decimals={0} />
         <ParameterStepper id="current" label="Current" unit="A" min={2} max={35} step={0.5} />
+        <ParameterStepper id="gapVoltage" label="Gap Voltage" unit="V" min={20} max={140} step={1} decimals={0} />
         <ParameterStepper id="pulseOn" label="Pulse ON" unit="us" min={20} max={300} step={5} decimals={0} />
         <ParameterStepper id="pulseOff" label="Pulse OFF" unit="us" min={10} max={180} step={5} decimals={0} />
         <ParameterStepper id="gapDistance" label="Gap Distance" unit="mm" min={0.02} max={0.18} step={0.005} decimals={3} />
         <ParameterStepper id="servoFeed" label="Servo Feed" unit="mm/min" min={0.02} max={1.2} step={0.02} decimals={2} />
+        <ParameterStepper id="toolDiameter" label="Tool Diameter" unit="mm" min={0.2} max={40} step={0.1} />
         <ParameterStepper id="pressure" label="Pressure" unit="bar" min={0.5} max={8} step={0.1} />
         <ParameterStepper id="flowRate" label="Flow" unit="L/min" min={1} max={20} step={0.2} />
         <ParameterStepper id="conductivity" label="Conductivity" unit="uS/cm" min={0.5} max={18} step={0.5} />
@@ -670,6 +756,60 @@ function ResearchMode() {
   );
 }
 
+function DeveloperDiagnostics() {
+  const [visible, setVisible] = useState(false);
+  const diagnostics = useTwinStore((state) => state.diagnostics);
+  const connectionStatus = useTwinStore((state) => state.connectionStatus);
+  const dataMode = useTwinStore((state) => state.dataMode);
+  const machineState = useTwinStore((state) => state.machineState);
+
+  return (
+    <Panel
+      title="Developer Diagnostics"
+      eyebrow="Hidden integration console"
+      accent="violet"
+      action={
+        <button className="rounded border border-plant-line px-3 py-1.5 text-xs text-plant-muted hover:text-plant-text" onClick={() => setVisible(!visible)} type="button">
+          {visible ? "Hide" : "Show"} Developer Mode
+        </button>
+      }
+    >
+      {visible ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricCard label="Gateway" value={connectionStatus === "connected" ? "1" : "0"} unit="" tone={connectionStatus === "connected" ? "green" : "red"} sublabel={connectionStatus} />
+            <MetricCard label="Mode" value={dataMode === "live-unity" ? "Live" : "Sim"} unit="" tone={dataMode === "live-unity" ? "cyan" : "amber"} sublabel="React source" />
+            <MetricCard label="Unity" value={machineState === "OFFLINE" ? "0" : "1"} unit="" tone={machineState === "OFFLINE" ? "red" : "green"} sublabel={machineState} />
+            <MetricCard label="Ping" value={`${diagnostics.latencyMs ?? 0}`} unit="ms" tone={diagnostics.latencyMs == null ? "amber" : "green"} sublabel="Gateway ack latency" />
+            <MetricCard label="Packets Sent" value={`${diagnostics.packetsSent}`} unit="" tone="cyan" sublabel="React outbound" />
+            <MetricCard label="Packets Received" value={`${diagnostics.packetsReceived}`} unit="" tone="green" sublabel="Gateway inbound" />
+            <MetricCard label="Reconnects" value={`${diagnostics.reconnectCount}`} unit="" tone={diagnostics.reconnectCount > 0 ? "amber" : "green"} sublabel="Socket recovery" />
+            <MetricCard label="Machine Link" value={connectionStatus === "connected" && machineState !== "OFFLINE" ? "OK" : "WAIT"} unit="" tone={connectionStatus === "connected" ? "green" : "amber"} sublabel="React-Gateway-Unity" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className="rounded bg-plant-cyan px-3 py-2 text-xs font-semibold uppercase text-plant-void" onClick={pingGateway} type="button">Ping</button>
+            <button className="rounded border border-plant-line px-3 py-2 text-xs font-semibold uppercase text-plant-text" onClick={requestLiveStatus} type="button">Request Status</button>
+            <button className="rounded border border-plant-green px-3 py-2 text-xs font-semibold uppercase text-plant-green" onClick={startLiveMachining} type="button">Test Start</button>
+            <button className="rounded border border-plant-amber px-3 py-2 text-xs font-semibold uppercase text-plant-amber" onClick={stopLiveMachining} type="button">Test Stop</button>
+          </div>
+          <div className="max-h-72 overflow-auto rounded border border-plant-line bg-plant-void">
+            {diagnostics.lastMessages.map((entry) => (
+              <div key={`${entry.timestamp}-${entry.direction}-${entry.type}`} className="grid gap-2 border-b border-plant-line px-3 py-2 font-mono text-[11px] text-plant-muted md:grid-cols-[170px_70px_190px_1fr]">
+                <span>{entry.timestamp}</span>
+                <span className={entry.direction === "out" ? "text-plant-cyan" : entry.direction === "in" ? "text-plant-green" : "text-plant-amber"}>{entry.direction}</span>
+                <span className="text-plant-text">{entry.type}</span>
+                <span className="truncate">{entry.summary}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-plant-muted">Developer Mode is hidden. Enable it only while testing gateway, Unity, and packet flow.</div>
+      )}
+    </Panel>
+  );
+}
+
 function Dashboard({ active }: { active: string }) {
   const metrics = useTwinStore((state) => state.metrics);
   const parameters = useTwinStore((state) => state.parameters);
@@ -690,6 +830,7 @@ function Dashboard({ active }: { active: string }) {
           <TrendChart dataKey="current" color="#f4b24d" title="Current Trend" unit="A" />
         </div>
       </div>
+      {showControl ? <LiveCommandPanel /> : null}
       {showControl ? <MachineControl /> : null}
       {showSensors ? <SensorFusion /> : null}
       {showAI ? <AICopilot /> : null}
@@ -699,13 +840,16 @@ function Dashboard({ active }: { active: string }) {
       {active === "research-mode" ? <ResearchMode /> : null}
       {showReports ? <AnalyticsReports /> : null}
       {active === "settings" ? (
-        <Panel title="Platform Settings" eyebrow="Role and integration status" accent="cyan">
-          <div className="grid gap-3 md:grid-cols-3">
-            <MetricCard label="MQTT Latency" value="184" unit="ms" tone="green" sublabel="Target below 500 ms" />
-            <MetricCard label="DAQ Loss" value="0.03" unit="%" tone="green" sublabel="Target below 0.1%" />
-            <MetricCard label="TLS Status" value="1.3" unit="" tone="cyan" sublabel="Encrypted plant network" />
-          </div>
-        </Panel>
+        <>
+          <Panel title="Platform Settings" eyebrow="Role and integration status" accent="cyan">
+            <div className="grid gap-3 md:grid-cols-3">
+              <MetricCard label="MQTT Latency" value="184" unit="ms" tone="green" sublabel="Target below 500 ms" />
+              <MetricCard label="DAQ Loss" value="0.03" unit="%" tone="green" sublabel="Target below 0.1%" />
+              <MetricCard label="TLS Status" value="1.3" unit="" tone="cyan" sublabel="Encrypted plant network" />
+            </div>
+          </Panel>
+          <DeveloperDiagnostics />
+        </>
       ) : null}
       <div className="grid gap-3 md:grid-cols-4">
         <StatusPill label={`${parameters.machiningMode}`} tone="cyan" />

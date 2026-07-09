@@ -10,6 +10,7 @@ namespace EDMDigitalTwin.Machine
     public class MachineParameterManager : MonoBehaviour
     {
         private static readonly Regex NumberPattern = new Regex("\"(?<field>[A-Za-z0-9_]+)\"\\s*:\\s*(?<value>-?\\d+(?:\\.\\d+)?)");
+        private static readonly Regex StringPattern = new Regex("\"(?<field>workpieceMaterial|electrodeMaterial)\"\\s*:\\s*\"(?<value>[^\"]*)\"");
 
         [SerializeField] private MachineParameters machineParameters = new MachineParameters();
 
@@ -39,6 +40,7 @@ namespace EDMDigitalTwin.Machine
 
             machineParameters.ApplyPatch(patch);
             OnParametersChanged?.Invoke(machineParameters);
+            MachineEvents.RaiseParameterChanged(machineParameters);
             Debug.Log($"Machine parameters updated: I={machineParameters.currentA}A V={machineParameters.voltageV}V Gap={machineParameters.gapVoltageV}V Ton={machineParameters.pulseOnUs}us Toff={machineParameters.pulseOffUs}us");
         }
 
@@ -73,6 +75,18 @@ namespace EDMDigitalTwin.Machine
                     case "pulseOffUs":
                         patch.pulseOffUs = value;
                         break;
+                    case "servoFeedPercent":
+                        patch.servoFeedPercent = value;
+                        break;
+                    case "flushingPressureBar":
+                        patch.flushingPressureBar = value;
+                        break;
+                    case "toolDiameterMm":
+                        patch.toolDiameterMm = value;
+                        break;
+                    case "depthOfCutMm":
+                        patch.depthOfCutMm = value;
+                        break;
                     case "temperatureC":
                         patch.temperatureC = value;
                         break;
@@ -81,6 +95,22 @@ namespace EDMDigitalTwin.Machine
                         break;
                     case "toolWear":
                         patch.toolWear = value;
+                        break;
+                }
+            }
+
+            foreach (Match match in StringPattern.Matches(json))
+            {
+                string field = match.Groups["field"].Value;
+                string value = match.Groups["value"].Value;
+
+                switch (field)
+                {
+                    case "workpieceMaterial":
+                        patch.workpieceMaterial = value;
+                        break;
+                    case "electrodeMaterial":
+                        patch.electrodeMaterial = value;
                         break;
                 }
             }

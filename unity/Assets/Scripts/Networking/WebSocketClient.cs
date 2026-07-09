@@ -17,6 +17,7 @@ namespace EDMDigitalTwin.Networking
         [Header("Runtime")]
         [SerializeField] private MachineManager machineManager;
         [SerializeField] private MachineParameterManager machineParameterManager;
+        [SerializeField] private CameraManager cameraManager;
         [SerializeField] private float reconnectDelaySeconds = 2f;
         [SerializeField] private float heartbeatIntervalSeconds = 10f;
         [SerializeField] private bool verboseLogging = true;
@@ -27,6 +28,9 @@ namespace EDMDigitalTwin.Networking
         private Coroutine heartbeatCoroutine;
         private bool intentionallyClosed;
         private bool isConnecting;
+
+        public bool IsConnected => webSocket != null && webSocket.State == WebSocketState.Open;
+        public event Action<bool> ConnectionChanged;
 
         public string GatewayUrl
         {
@@ -44,6 +48,11 @@ namespace EDMDigitalTwin.Networking
             if (machineParameterManager == null)
             {
                 machineParameterManager = FindFirstObjectByType<MachineParameterManager>();
+            }
+
+            if (cameraManager == null)
+            {
+                cameraManager = FindFirstObjectByType<CameraManager>();
             }
         }
 
@@ -147,6 +156,18 @@ namespace EDMDigitalTwin.Networking
             Log($"Sent: {json}");
         }
 
+        public async void SendRawJson(string json)
+        {
+            if (webSocket == null || webSocket.State != WebSocketState.Open)
+            {
+                Debug.LogWarning("Cannot send raw gateway message because gateway is not connected.");
+                return;
+            }
+
+            await webSocket.SendText(json);
+            Log($"Sent: {json}");
+        }
+
         private void RegisterCallbacks(WebSocket socket)
         {
             socket.OnOpen += () =>
@@ -154,6 +175,7 @@ namespace EDMDigitalTwin.Networking
                 mainThreadActions.Enqueue(() =>
                 {
                     Log("Connected to gateway.");
+                    ConnectionChanged?.Invoke(true);
                     Send(GatewayMessageFactory.ClientHello());
 
                     if (heartbeatCoroutine != null)
@@ -184,6 +206,7 @@ namespace EDMDigitalTwin.Networking
                 mainThreadActions.Enqueue(() =>
                 {
                     Log($"Gateway connection closed with code {code}.");
+                    ConnectionChanged?.Invoke(false);
 
                     if (heartbeatCoroutine != null)
                     {
@@ -220,6 +243,12 @@ namespace EDMDigitalTwin.Networking
                 return;
             }
 
+            if (message.type == GatewayMessageTypes.CameraCommand)
+            {
+                GetCameraManager()?.SetView(message.payload?.view);
+                return;
+            }
+
             if (message.type == GatewayMessageTypes.Ack || message.type == GatewayMessageTypes.Heartbeat)
             {
                 return;
@@ -245,6 +274,18 @@ namespace EDMDigitalTwin.Networking
                     break;
                 case "reset":
                     GetMachineManager()?.ResetMachine();
+                    break;
+                case "home":
+                    GetMachineManager()?.HomeMachine();
+                    break;
+                case "pause":
+                    GetMachineManager()?.PauseMachining();
+                    break;
+                case "resume":
+                    GetMachineManager()?.ResumeMachining();
+                    break;
+                case "request_status":
+                    GetMachineManager()?.PublishCurrentState();
                     break;
                 case "emergency_stop":
                     GetMachineManager()?.EmergencyStop();
@@ -283,6 +324,21 @@ namespace EDMDigitalTwin.Networking
             }
 
             return machineParameterManager;
+        }
+
+        private CameraManager GetCameraManager()
+        {
+            if (cameraManager == null)
+            {
+                cameraManager = FindFirstObjectByType<CameraManager>();
+            }
+
+            if (cameraManager == null)
+            {
+                Debug.LogWarning("CameraManager is missing. Add CameraManager to a scene object.");
+            }
+
+            return cameraManager;
         }
 
         private IEnumerator HeartbeatLoop()

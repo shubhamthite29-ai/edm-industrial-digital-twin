@@ -2,12 +2,17 @@ import { realtimeClient, type GatewayMessage, type RealtimeClient } from "../Rea
 import type { MachineParameters } from "../types/twin";
 
 export interface MachineParametersPatchPayload {
-  [key: string]: number;
   currentA: number;
   voltageV: number;
   gapVoltageV: number;
   pulseOnUs: number;
   pulseOffUs: number;
+  servoFeedPercent: number;
+  flushingPressureBar: number;
+  toolDiameterMm: number;
+  workpieceMaterial: string;
+  electrodeMaterial: string;
+  depthOfCutMm: number;
 }
 
 export class MachineParameterService {
@@ -17,9 +22,15 @@ export class MachineParameterService {
     const payload: MachineParametersPatchPayload = {
       currentA: parameters.current,
       voltageV: parameters.voltage,
-      gapVoltageV: parameters.voltage,
+      gapVoltageV: parameters.gapVoltage,
       pulseOnUs: parameters.pulseOn,
       pulseOffUs: parameters.pulseOff,
+      servoFeedPercent: parameters.servoFeed,
+      flushingPressureBar: parameters.pressure,
+      toolDiameterMm: parameters.toolDiameter,
+      workpieceMaterial: parameters.workpieceMaterial,
+      electrodeMaterial: parameters.electrodeMaterial,
+      depthOfCutMm: parameters.depthOfCut,
     };
 
     return this.sendPatch(payload);
@@ -28,7 +39,7 @@ export class MachineParameterService {
   sendPatch(payload: MachineParametersPatchPayload) {
     const message: GatewayMessage = {
       type: "machine.parameters.patch",
-      payload,
+      payload: payload as unknown as Record<string, unknown>,
     };
 
     return this.client.send(message);

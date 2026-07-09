@@ -19,10 +19,12 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 export const defaultParameters: MachineParameters = {
   voltage: 90,
   current: 18,
+  gapVoltage: 72,
   pulseOn: 150,
   pulseOff: 45,
   gapDistance: 0.055,
   servoFeed: 0.32,
+  toolDiameter: 8,
   pressure: 2.8,
   flowRate: 9.4,
   conductivity: 4.5,

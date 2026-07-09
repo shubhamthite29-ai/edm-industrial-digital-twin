@@ -3,7 +3,7 @@ import type { MachineParameters } from "../types/twin";
 import { useTwinStore } from "../store/useTwinStore";
 
 interface ParameterStepperProps {
-  id: keyof Pick<MachineParameters, "voltage" | "current" | "pulseOn" | "pulseOff" | "gapDistance" | "servoFeed" | "pressure" | "flowRate" | "conductivity" | "openCircuitVoltage" | "depthOfCut">;
+  id: keyof Pick<MachineParameters, "voltage" | "current" | "gapVoltage" | "pulseOn" | "pulseOff" | "gapDistance" | "servoFeed" | "toolDiameter" | "pressure" | "flowRate" | "conductivity" | "openCircuitVoltage" | "depthOfCut">;
   label: string;
   unit: string;
   min: number;

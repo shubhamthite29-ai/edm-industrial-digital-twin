@@ -11,6 +11,22 @@ export interface GatewayMessage {
 
 type MessageHandler = (message: GatewayMessage) => void;
 type StatusHandler = (status: ConnectionStatus) => void;
+type DiagnosticsHandler = (diagnostics: RealtimeDiagnostics) => void;
+
+export interface RealtimeLogEntry {
+  direction: "in" | "out" | "system";
+  timestamp: string;
+  type: string;
+  summary: string;
+}
+
+export interface RealtimeDiagnostics {
+  packetsSent: number;
+  packetsReceived: number;
+  reconnectCount: number;
+  latencyMs: number | null;
+  lastMessages: RealtimeLogEntry[];
+}
 
 interface RealtimeClientOptions {
   url?: string;
@@ -27,6 +43,15 @@ export class RealtimeClient {
   private manuallyClosed = false;
   private messageHandlers = new Set<MessageHandler>();
   private statusHandlers = new Set<StatusHandler>();
+  private diagnosticsHandlers = new Set<DiagnosticsHandler>();
+  private pendingMessages = new Map<string, number>();
+  private diagnostics: RealtimeDiagnostics = {
+    packetsSent: 0,
+    packetsReceived: 0,
+    reconnectCount: 0,
+    latencyMs: null,
+    lastMessages: [],
+  };
   private status: ConnectionStatus = "disconnected";
 
   constructor(options: RealtimeClientOptions = {}) {
@@ -90,6 +115,18 @@ export class RealtimeClient {
     };
 
     this.socket.send(JSON.stringify(envelope));
+    if (envelope.messageId) {
+      this.pendingMessages.set(envelope.messageId, performance.now());
+    }
+    this.updateDiagnostics({
+      packetsSent: this.diagnostics.packetsSent + 1,
+      lastMessages: this.pushLog({
+        direction: "out",
+        timestamp: new Date().toISOString(),
+        type: envelope.type,
+        summary: JSON.stringify(envelope.payload ?? {}),
+      }),
+    });
     return true;
   }
 
@@ -102,6 +139,21 @@ export class RealtimeClient {
     this.statusHandlers.add(handler);
     handler(this.status);
     return () => this.statusHandlers.delete(handler);
+  }
+
+  onDiagnostics(handler: DiagnosticsHandler) {
+    this.diagnosticsHandlers.add(handler);
+    handler(this.diagnostics);
+    return () => this.diagnosticsHandlers.delete(handler);
+  }
+
+  ping() {
+    return this.send({
+      type: "heartbeat",
+      payload: {
+        status: "ping",
+      },
+    });
   }
 
   private handleOpen = () => {
@@ -119,6 +171,7 @@ export class RealtimeClient {
     try {
       const message = JSON.parse(event.data) as GatewayMessage;
       if (!message || typeof message.type !== "string") return;
+      this.trackIncoming(message);
       this.messageHandlers.forEach((handler) => handler(message));
     } catch {
       // Ignore malformed gateway packets; protocol errors can be surfaced later.
@@ -130,6 +183,15 @@ export class RealtimeClient {
     this.setStatus("disconnected");
 
     if (!this.manuallyClosed) {
+      this.updateDiagnostics({
+        reconnectCount: this.diagnostics.reconnectCount + 1,
+        lastMessages: this.pushLog({
+          direction: "system",
+          timestamp: new Date().toISOString(),
+          type: "reconnect",
+          summary: "WebSocket closed; reconnect scheduled.",
+        }),
+      });
       this.scheduleReconnect();
     }
   };
@@ -156,6 +218,36 @@ export class RealtimeClient {
     if (this.status === status) return;
     this.status = status;
     this.statusHandlers.forEach((handler) => handler(status));
+  }
+
+  private trackIncoming(message: GatewayMessage) {
+    let latencyMs = this.diagnostics.latencyMs;
+    const ackedMessageId = typeof message.payload?.messageId === "string" ? message.payload.messageId : null;
+
+    if (ackedMessageId && this.pendingMessages.has(ackedMessageId)) {
+      latencyMs = Math.round(performance.now() - this.pendingMessages.get(ackedMessageId)!);
+      this.pendingMessages.delete(ackedMessageId);
+    }
+
+    this.updateDiagnostics({
+      packetsReceived: this.diagnostics.packetsReceived + 1,
+      latencyMs,
+      lastMessages: this.pushLog({
+        direction: "in",
+        timestamp: new Date().toISOString(),
+        type: message.type,
+        summary: JSON.stringify(message.payload ?? {}),
+      }),
+    });
+  }
+
+  private pushLog(entry: RealtimeLogEntry) {
+    return [entry, ...this.diagnostics.lastMessages].slice(0, 20);
+  }
+
+  private updateDiagnostics(partial: Partial<RealtimeDiagnostics>) {
+    this.diagnostics = { ...this.diagnostics, ...partial };
+    this.diagnosticsHandlers.forEach((handler) => handler(this.diagnostics));
   }
 }
 

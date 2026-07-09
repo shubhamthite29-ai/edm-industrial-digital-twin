@@ -5,14 +5,31 @@ export type AlarmLevel = "INFO" | "WARNING" | "CRITICAL";
 export type DataMode = "simulation" | "live-unity";
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
 export type MachineStatus = "Idle" | "Machining";
+export type MachineLifecycleState =
+  | "BOOTING"
+  | "READY"
+  | "WAITING_FOR_PARAMETERS"
+  | "READY_TO_START"
+  | "STARTING"
+  | "POSITIONING_TANK"
+  | "LOWERING_TOOL"
+  | "MACHINING"
+  | "RETRACTING"
+  | "RETURNING_TANK"
+  | "COMPLETED"
+  | "FAULT"
+  | "EMERGENCY_STOP"
+  | "OFFLINE";
 
 export interface MachineParameters {
   voltage: number;
   current: number;
+  gapVoltage: number;
   pulseOn: number;
   pulseOff: number;
   gapDistance: number;
   servoFeed: number;
+  toolDiameter: number;
   pressure: number;
   flowRate: number;
   conductivity: number;
@@ -74,3 +91,14 @@ export interface ValidationResult {
   warnings: string[];
   confidence: number;
 }
+
+export interface UnityTelemetry {
+  machineState: MachineLifecycleState;
+  cyclePercent: number;
+  toolPosition: number;
+  tankPosition: number;
+  sparkActive: boolean;
+  machineTimeSeconds: number;
+}
+
+export type CameraView = "front" | "top" | "side" | "tool" | "isometric" | "free";
