@@ -389,7 +389,7 @@ namespace EDMDigitalTwin.Networking
             {
                 MachineEvents.RaiseMachineStarted();
             }
-            else if (state == MachineState.STOPPED || state == MachineState.READY || state == MachineState.EMERGENCY_STOP)
+            else if (state == MachineState.STOPPED || state == MachineState.EMERGENCY_STOP)
             {
                 MachineEvents.RaiseMachineFinished();
             }

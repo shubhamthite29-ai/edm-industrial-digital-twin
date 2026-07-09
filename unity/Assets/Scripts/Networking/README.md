@@ -40,6 +40,21 @@ It is intended for Unity Editor and Standalone builds connecting to the local No
 
 ## Scene Setup
 
+Replace the whole existing Unity integration script set. Do not copy only `MachineManager.cs`.
+
+The enum file `Assets/Scripts/Machine/MachineState.cs` must contain:
+
+```txt
+READY
+STARTING
+MACHINING
+PAUSED
+STOPPED
+HOMING
+RESETTING
+EMERGENCY_STOP
+```
+
 1. Create an empty GameObject named `DigitalTwinNetworking`.
 2. Add `WebSocketClient`.
 3. Add `MachineManager`.
