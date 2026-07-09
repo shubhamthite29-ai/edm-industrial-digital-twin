@@ -1,9 +1,12 @@
 import { create } from "zustand";
-import type { Alarm, DerivedMetrics, HistoryPoint, MachineParameters, UserRole, ValidationResult } from "../types/twin";
+import type { Alarm, ConnectionStatus, DataMode, DerivedMetrics, HistoryPoint, MachineParameters, MachineStatus, UserRole, ValidationResult } from "../types/twin";
 import { buildAlarms, calculateDerivedMetrics, compareWhatIf, defaultParameters, validateParameterSet } from "../services/edmCalculations";
 
 interface TwinState {
   running: boolean;
+  dataMode: DataMode;
+  connectionStatus: ConnectionStatus;
+  machineStatus: MachineStatus;
   role: UserRole;
   elapsedSeconds: number;
   parameters: MachineParameters;
@@ -14,6 +17,9 @@ interface TwinState {
   alarms: Alarm[];
   history: HistoryPoint[];
   setRunning: (running: boolean) => void;
+  setDataMode: (dataMode: DataMode) => void;
+  setConnectionStatus: (connectionStatus: ConnectionStatus) => void;
+  setMachineStatus: (machineStatus: MachineStatus) => void;
   setRole: (role: UserRole) => void;
   updatePendingParameter: <K extends keyof MachineParameters>(key: K, value: MachineParameters[K]) => void;
   incrementPendingParameter: (key: keyof Pick<MachineParameters, "voltage" | "current" | "pulseOn" | "pulseOff" | "gapDistance" | "servoFeed" | "pressure" | "flowRate" | "conductivity" | "openCircuitVoltage" | "depthOfCut">, delta: number) => void;
@@ -57,6 +63,9 @@ const initialMetrics = calculateDerivedMetrics(defaultParameters, 0);
 
 export const useTwinStore = create<TwinState>((set) => ({
   running: true,
+  dataMode: "simulation",
+  connectionStatus: "disconnected",
+  machineStatus: "Machining",
   role: "Production Engineer",
   elapsedSeconds: 0,
   parameters: defaultParameters,
@@ -66,7 +75,10 @@ export const useTwinStore = create<TwinState>((set) => ({
   validation: validateParameterSet(defaultParameters, initialMetrics),
   alarms: buildAlarms(defaultParameters, initialMetrics),
   history: Array.from({ length: 48 }, (_, index) => pointFromState(index, defaultParameters, calculateDerivedMetrics(defaultParameters, index))),
-  setRunning: (running) => set({ running }),
+  setRunning: (running) => set({ running, machineStatus: running ? "Machining" : "Idle" }),
+  setDataMode: (dataMode) => set({ dataMode }),
+  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  setMachineStatus: (machineStatus) => set({ machineStatus, running: machineStatus === "Machining" }),
   setRole: (role) => set({ role }),
   updatePendingParameter: (key, value) =>
     set((state) => {
@@ -95,6 +107,7 @@ export const useTwinStore = create<TwinState>((set) => ({
     }),
   tick: () =>
     set((state) => {
+      if (state.dataMode !== "simulation") return state;
       if (!state.running) return state;
       const elapsedSeconds = state.elapsedSeconds + 1;
       const phase = elapsedSeconds / 28;

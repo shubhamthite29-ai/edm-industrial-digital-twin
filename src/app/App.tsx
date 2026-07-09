@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Activity,
@@ -43,8 +43,9 @@ import { StatusPill } from "../components/StatusPill";
 import { sensors, sensorGroups } from "../data/sensors";
 import { useInterval } from "../hooks/useInterval";
 import { compareWhatIf } from "../services/edmCalculations";
+import { initializeLiveUnityService, startLiveMachining, stopLiveMachining } from "../services/liveUnityService";
 import { useTwinStore } from "../store/useTwinStore";
-import type { MachineMode, MachineParameters, UserRole } from "../types/twin";
+import type { ConnectionStatus, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
 
 const modules = [
   { key: "dashboard", label: "Dashboard", icon: Gauge },
@@ -77,13 +78,43 @@ function currentModule(pathname: string) {
   return modules.some((item) => item.key === key) ? key : "dashboard";
 }
 
+function connectionTone(status: ConnectionStatus) {
+  if (status === "connected") return "green";
+  if (status === "connecting") return "amber";
+  return "red";
+}
+
+function connectionLabel(status: ConnectionStatus) {
+  if (status === "connected") return "Connected";
+  if (status === "connecting") return "Connecting...";
+  return "Disconnected";
+}
+
 function ShellHeader() {
   const running = useTwinStore((state) => state.running);
   const setRunning = useTwinStore((state) => state.setRunning);
+  const dataMode = useTwinStore((state) => state.dataMode);
+  const setDataMode = useTwinStore((state) => state.setDataMode);
+  const connectionStatus = useTwinStore((state) => state.connectionStatus);
+  const machineStatus = useTwinStore((state) => state.machineStatus);
   const role = useTwinStore((state) => state.role);
   const setRole = useTwinStore((state) => state.setRole);
   const metrics = useTwinStore((state) => state.metrics);
   const alarms = useTwinStore((state) => state.alarms);
+  const liveModeDisconnected = dataMode === "live-unity" && connectionStatus !== "connected";
+
+  const handleRunToggle = () => {
+    if (dataMode === "simulation") {
+      setRunning(!running);
+      return;
+    }
+
+    if (running) {
+      stopLiveMachining();
+    } else {
+      startLiveMachining();
+    }
+  };
 
   return (
     <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-plant-line bg-plant-deck/95 px-5">
@@ -94,9 +125,27 @@ function ShellHeader() {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <StatusPill label={running ? "Machine Active" : "Stopped"} tone={running ? "green" : "red"} />
+        <StatusPill label={machineStatus} tone={machineStatus === "Machining" ? "green" : "red"} />
+        <StatusPill label={connectionLabel(connectionStatus)} tone={connectionTone(connectionStatus)} />
         <StatusPill label={`${fmt(metrics.twinAccuracy, 0)}% Twin Sync`} tone="cyan" />
         <StatusPill label={`${alarms.length} Alarms`} tone={alarms.some((alarm) => alarm.level === "CRITICAL") ? "red" : alarms.length ? "amber" : "green"} />
+        <div className="inline-flex h-9 overflow-hidden rounded border border-plant-line bg-plant-void">
+          {[
+            ["simulation", "Simulation Mode"],
+            ["live-unity", "Live Unity Mode"],
+          ].map(([mode, label]) => (
+            <button
+              key={mode}
+              className={`px-3 text-xs font-semibold uppercase tracking-wide transition ${
+                dataMode === mode ? "bg-plant-cyan text-plant-void" : "text-plant-muted hover:text-plant-text"
+              }`}
+              onClick={() => setDataMode(mode as DataMode)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <select
           className="h-9 rounded border border-plant-line bg-plant-void px-2 text-xs text-plant-text outline-none"
           value={role}
@@ -111,7 +160,8 @@ function ShellHeader() {
           className={`inline-flex h-9 items-center gap-2 rounded px-3 text-xs font-semibold uppercase tracking-wide ${
             running ? "bg-plant-red text-white" : "bg-plant-green text-plant-void"
           }`}
-          onClick={() => setRunning(!running)}
+          disabled={liveModeDisconnected}
+          onClick={handleRunToggle}
           type="button"
         >
           {running ? <Pause size={15} /> : <Play size={15} />}
@@ -666,6 +716,11 @@ export default function App() {
   const location = useLocation();
   const active = currentModule(location.pathname);
   const tick = useTwinStore((state) => state.tick);
+
+  useEffect(() => {
+    initializeLiveUnityService();
+  }, []);
+
   useInterval(tick, 1000);
 
   return (

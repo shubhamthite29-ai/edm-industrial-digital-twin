@@ -2,6 +2,9 @@ export type MachineMode = "Die Sinking" | "Wire Cut" | "EDM Drilling";
 export type UserRole = "Operator" | "Production Engineer" | "Maintenance Engineer" | "Research Mode" | "Administrator";
 export type GapState = "Open Circuit" | "Spark" | "Arc" | "Short Circuit";
 export type AlarmLevel = "INFO" | "WARNING" | "CRITICAL";
+export type DataMode = "simulation" | "live-unity";
+export type ConnectionStatus = "connected" | "connecting" | "disconnected";
+export type MachineStatus = "Idle" | "Machining";
 
 export interface MachineParameters {
   voltage: number;
