@@ -26,6 +26,9 @@ namespace EDMDigitalTwin.Machine
         private float elapsedTimeSeconds;
         private float remainingTimeSeconds;
         private float progressPercent;
+        private float runtimeToolPosition;
+        private float runtimeTankPosition;
+        private bool hasRuntimePositions;
 
         public MachineState CurrentState => machineState;
         public float CyclePercent => cyclePercent;
@@ -90,7 +93,14 @@ namespace EDMDigitalTwin.Machine
             progressPercent = Mathf.Clamp(progress, 0f, 100f);
             cyclePercent = progressPercent;
             sparkActive = isSparkActive;
-            PublishNow();
+        }
+
+        public void SetRuntime(MachineState state, float elapsedSeconds, float remainingSeconds, float progress, bool isSparkActive, float toolPosition, float tankPosition)
+        {
+            runtimeToolPosition = toolPosition;
+            runtimeTankPosition = tankPosition;
+            hasRuntimePositions = true;
+            SetRuntime(state, elapsedSeconds, remainingSeconds, progress, isSparkActive);
         }
 
         public void SetSparkActive(bool value)
@@ -226,9 +236,9 @@ namespace EDMDigitalTwin.Machine
             builder.Append(",");
             AppendNumber(builder, "progressPercent", progressPercent);
             builder.Append(",");
-            AppendNumber(builder, "toolPosition", toolTransform != null ? toolTransform.localPosition.y : 0f);
+            AppendNumber(builder, "toolPosition", toolTransform != null ? toolTransform.localPosition.y : hasRuntimePositions ? runtimeToolPosition : 0f);
             builder.Append(",");
-            AppendNumber(builder, "tankPosition", tankTransform != null ? tankTransform.localPosition.y : 0f);
+            AppendNumber(builder, "tankPosition", tankTransform != null ? tankTransform.localPosition.y : hasRuntimePositions ? runtimeTankPosition : 0f);
             builder.Append(",");
             AppendBoolean(builder, "sparkActive", sparkActive);
             builder.Append(",");

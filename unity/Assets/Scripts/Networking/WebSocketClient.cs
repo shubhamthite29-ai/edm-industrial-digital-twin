@@ -44,20 +44,7 @@ namespace EDMDigitalTwin.Networking
 
         private void Awake()
         {
-            if (machineManager == null)
-            {
-                machineManager = FindFirstObjectByType<MachineManager>();
-            }
-
-            if (machineParameterManager == null)
-            {
-                machineParameterManager = FindFirstObjectByType<MachineParameterManager>();
-            }
-
-            if (cameraManager == null)
-            {
-                cameraManager = FindFirstObjectByType<CameraManager>();
-            }
+            ResolveSceneReferences(createMissing: true);
         }
 
         private void Start()
@@ -355,14 +342,11 @@ namespace EDMDigitalTwin.Networking
 
         private MachineManager GetMachineManager()
         {
-            if (machineManager == null)
-            {
-                machineManager = FindFirstObjectByType<MachineManager>();
-            }
+            ResolveSceneReferences(createMissing: true);
 
             if (machineManager == null)
             {
-                Debug.LogWarning("MachineManager is missing. Add MachineManager to a scene object.");
+                Debug.LogError("MachineManager is missing and could not be created.");
             }
 
             return machineManager;
@@ -370,14 +354,11 @@ namespace EDMDigitalTwin.Networking
 
         private MachineParameterManager GetMachineParameterManager()
         {
-            if (machineParameterManager == null)
-            {
-                machineParameterManager = FindFirstObjectByType<MachineParameterManager>();
-            }
+            ResolveSceneReferences(createMissing: true);
 
             if (machineParameterManager == null)
             {
-                Debug.LogWarning("MachineParameterManager is missing. Add MachineParameterManager to a scene object.");
+                Debug.LogError("MachineParameterManager is missing and could not be created.");
             }
 
             return machineParameterManager;
@@ -396,6 +377,48 @@ namespace EDMDigitalTwin.Networking
             }
 
             return cameraManager;
+        }
+
+        private void ResolveSceneReferences(bool createMissing)
+        {
+            if (machineManager == null)
+            {
+                machineManager = FindFirstObjectByType<MachineManager>();
+            }
+
+            if (machineParameterManager == null)
+            {
+                machineParameterManager = FindFirstObjectByType<MachineParameterManager>();
+            }
+
+            if (cameraManager == null)
+            {
+                cameraManager = FindFirstObjectByType<CameraManager>();
+            }
+
+            if (!createMissing)
+            {
+                return;
+            }
+
+            if (machineParameterManager == null)
+            {
+                machineParameterManager = gameObject.AddComponent<MachineParameterManager>();
+                Debug.LogWarning("MachineParameterManager was missing and has been added to the WebSocketClient GameObject.");
+            }
+
+            if (machineManager == null)
+            {
+                machineManager = gameObject.AddComponent<MachineManager>();
+                Debug.LogWarning("MachineManager was missing and has been added to the WebSocketClient GameObject.");
+            }
+
+            MachineTelemetryPublisher telemetryPublisher = FindFirstObjectByType<MachineTelemetryPublisher>();
+            if (telemetryPublisher == null)
+            {
+                telemetryPublisher = gameObject.AddComponent<MachineTelemetryPublisher>();
+                Debug.LogWarning("MachineTelemetryPublisher was missing and has been added to the WebSocketClient GameObject.");
+            }
         }
 
         private IEnumerator HeartbeatLoop()
