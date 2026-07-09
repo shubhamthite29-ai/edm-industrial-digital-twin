@@ -23,9 +23,15 @@ namespace EDMDigitalTwin.Machine
 
         private Coroutine publishCoroutine;
         private float machineTimeSeconds;
+        private float elapsedTimeSeconds;
+        private float remainingTimeSeconds;
+        private float progressPercent;
 
         public MachineState CurrentState => machineState;
         public float CyclePercent => cyclePercent;
+        public float ProgressPercent => progressPercent;
+        public float ElapsedTimeSeconds => elapsedTimeSeconds;
+        public float RemainingTimeSeconds => remainingTimeSeconds;
         public bool SparkActive => sparkActive;
 
         private void Awake()
@@ -72,6 +78,18 @@ namespace EDMDigitalTwin.Machine
         public void SetCyclePercent(float value)
         {
             cyclePercent = Mathf.Clamp(value, 0f, 100f);
+            progressPercent = cyclePercent;
+            PublishNow();
+        }
+
+        public void SetRuntime(MachineState state, float elapsedSeconds, float remainingSeconds, float progress, bool isSparkActive)
+        {
+            machineState = state;
+            elapsedTimeSeconds = Mathf.Max(0f, elapsedSeconds);
+            remainingTimeSeconds = Mathf.Max(0f, remainingSeconds);
+            progressPercent = Mathf.Clamp(progress, 0f, 100f);
+            cyclePercent = progressPercent;
+            sparkActive = isSparkActive;
             PublishNow();
         }
 
@@ -148,7 +166,7 @@ namespace EDMDigitalTwin.Machine
 
         private void HandleMachineFinished()
         {
-            machineState = MachineState.COMPLETED;
+            machineState = MachineState.STOPPED;
             cyclePercent = 100f;
             sparkActive = false;
             PublishNow();
@@ -206,6 +224,8 @@ namespace EDMDigitalTwin.Machine
             builder.Append(",");
             AppendNumber(builder, "cyclePercent", cyclePercent);
             builder.Append(",");
+            AppendNumber(builder, "progressPercent", progressPercent);
+            builder.Append(",");
             AppendNumber(builder, "toolPosition", toolTransform != null ? toolTransform.localPosition.y : 0f);
             builder.Append(",");
             AppendNumber(builder, "tankPosition", tankTransform != null ? tankTransform.localPosition.y : 0f);
@@ -213,6 +233,10 @@ namespace EDMDigitalTwin.Machine
             AppendBoolean(builder, "sparkActive", sparkActive);
             builder.Append(",");
             AppendNumber(builder, "machineTimeSeconds", machineTimeSeconds);
+            builder.Append(",");
+            AppendNumber(builder, "elapsedTimeSeconds", elapsedTimeSeconds);
+            builder.Append(",");
+            AppendNumber(builder, "remainingTimeSeconds", remainingTimeSeconds);
             builder.Append("}}");
             return builder.ToString();
         }

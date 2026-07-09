@@ -1,6 +1,22 @@
 import { create } from "zustand";
 import type { RealtimeDiagnostics } from "../Realtime/RealtimeClient";
-import type { Alarm, ConnectionStatus, DataMode, DerivedMetrics, HistoryPoint, MachineLifecycleState, MachineParameters, MachineStatus, UnityTelemetry, UserRole, ValidationResult } from "../types/twin";
+import type {
+  Alarm,
+  ConnectionStatus,
+  DashboardNotification,
+  DataMode,
+  DerivedMetrics,
+  EventLogCategory,
+  EventLogEntry,
+  EventLogLevel,
+  HistoryPoint,
+  MachineLifecycleState,
+  MachineParameters,
+  MachineStatus,
+  UnityTelemetry,
+  UserRole,
+  ValidationResult,
+} from "../types/twin";
 import { buildAlarms, calculateDerivedMetrics, compareWhatIf, defaultParameters, validateParameterSet } from "../services/edmCalculations";
 
 interface TwinState {
@@ -19,6 +35,9 @@ interface TwinState {
   metrics: DerivedMetrics;
   validation: ValidationResult;
   alarms: Alarm[];
+  alarmHistory: Alarm[];
+  eventLog: EventLogEntry[];
+  notifications: DashboardNotification[];
   history: HistoryPoint[];
   setRunning: (running: boolean) => void;
   setDataMode: (dataMode: DataMode) => void;
@@ -32,12 +51,83 @@ interface TwinState {
     metrics?: Partial<DerivedMetrics>;
   }) => void;
   setRealtimeDiagnostics: (diagnostics: RealtimeDiagnostics) => void;
+  addEvent: (level: EventLogLevel, category: EventLogCategory, message: string) => void;
+  pushNotification: (level: EventLogLevel, message: string) => void;
+  dismissNotification: (id: string) => void;
   setRole: (role: UserRole) => void;
   updatePendingParameter: <K extends keyof MachineParameters>(key: K, value: MachineParameters[K]) => void;
   incrementPendingParameter: (key: keyof Pick<MachineParameters, "voltage" | "current" | "gapVoltage" | "pulseOn" | "pulseOff" | "gapDistance" | "servoFeed" | "toolDiameter" | "pressure" | "flowRate" | "conductivity" | "openCircuitVoltage" | "depthOfCut">, delta: number) => void;
   resetPending: () => void;
   applyToTwin: () => void;
   tick: () => void;
+}
+
+const persistedSettingsKey = "edm.digitalTwin.machineSettings.v1";
+const persistedEventsKey = "edm.digitalTwin.eventLog.v1";
+const persistedAlarmsKey = "edm.digitalTwin.alarmHistory.v1";
+
+function canUseStorage() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function safeReadJson<T>(key: string, fallback: T): T {
+  if (!canUseStorage()) return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? ({ ...fallback, ...JSON.parse(raw) } as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeReadArray<T>(key: string): T[] {
+  if (!canUseStorage()) return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function safeWriteJson(key: string, value: unknown) {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function persistMachineSettings(parameters: MachineParameters) {
+  safeWriteJson(persistedSettingsKey, {
+    current: parameters.current,
+    voltage: parameters.voltage,
+    gapVoltage: parameters.gapVoltage,
+    pulseOn: parameters.pulseOn,
+    pulseOff: parameters.pulseOff,
+    machiningMode: parameters.machiningMode,
+  });
+}
+
+function createId(prefix: string) {
+  const random = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  return `${prefix}-${random}`;
+}
+
+function buildEvent(level: EventLogLevel, category: EventLogCategory, message: string): EventLogEntry {
+  return {
+    id: createId("evt"),
+    timestamp: new Date().toISOString(),
+    level,
+    category,
+    message,
+  };
+}
+
+function buildNotification(level: EventLogLevel, message: string): DashboardNotification {
+  return {
+    id: createId("note"),
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+  };
 }
 
 const numericBounds = {
@@ -73,7 +163,10 @@ function pointFromState(t: number, parameters: MachineParameters, metrics: Deriv
   };
 }
 
-const initialMetrics = calculateDerivedMetrics(defaultParameters, 0);
+const initialParameters = safeReadJson<MachineParameters>(persistedSettingsKey, defaultParameters);
+const initialMetrics = calculateDerivedMetrics(initialParameters, 0);
+const initialEventLog = safeReadArray<EventLogEntry>(persistedEventsKey).slice(0, 100);
+const initialAlarmHistory = safeReadArray<Alarm>(persistedAlarmsKey).slice(0, 200);
 
 export const useTwinStore = create<TwinState>((set) => ({
   running: true,
@@ -84,10 +177,13 @@ export const useTwinStore = create<TwinState>((set) => ({
   unityTelemetry: {
     machineState: "READY",
     cyclePercent: 0,
+    progressPercent: 0,
     toolPosition: 0,
     tankPosition: 0,
     sparkActive: false,
     machineTimeSeconds: 0,
+    elapsedTimeSeconds: 0,
+    remainingTimeSeconds: 0,
   },
   diagnostics: {
     packetsSent: 0,
@@ -98,16 +194,29 @@ export const useTwinStore = create<TwinState>((set) => ({
   },
   role: "Production Engineer",
   elapsedSeconds: 0,
-  parameters: defaultParameters,
-  pendingParameters: defaultParameters,
+  parameters: initialParameters,
+  pendingParameters: initialParameters,
   metrics: initialMetrics,
   pendingDirty: false,
-  validation: validateParameterSet(defaultParameters, initialMetrics),
-  alarms: buildAlarms(defaultParameters, initialMetrics),
-  history: Array.from({ length: 48 }, (_, index) => pointFromState(index, defaultParameters, calculateDerivedMetrics(defaultParameters, index))),
-  setRunning: (running) => set({ running, machineStatus: running ? "Machining" : "Idle" }),
-  setDataMode: (dataMode) => set({ dataMode }),
-  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  validation: validateParameterSet(initialParameters, initialMetrics),
+  alarms: buildAlarms(initialParameters, initialMetrics),
+  alarmHistory: initialAlarmHistory,
+  eventLog: initialEventLog,
+  notifications: [],
+  history: Array.from({ length: 48 }, (_, index) => pointFromState(index, initialParameters, calculateDerivedMetrics(initialParameters, index))),
+  setRunning: (running) => set({ running, machineStatus: running ? "Machining" : "Idle", machineState: running ? "MACHINING" : "STOPPED" }),
+  setDataMode: (dataMode) => set((state) => ({ dataMode, eventLog: [buildEvent("INFO", "SYSTEM", `Data mode changed to ${dataMode}.`), ...state.eventLog].slice(0, 100) })),
+  setConnectionStatus: (connectionStatus) =>
+    set((state) => {
+      const message = `Dashboard gateway connection ${connectionStatus}.`;
+      const eventLog = [buildEvent(connectionStatus === "connected" ? "INFO" : "WARNING", "CONNECTION", message), ...state.eventLog].slice(0, 100);
+      safeWriteJson(persistedEventsKey, eventLog);
+      return {
+        connectionStatus,
+        eventLog,
+        notifications: [buildNotification(connectionStatus === "connected" ? "INFO" : "WARNING", connectionStatus === "connected" ? "Connected" : "Disconnected"), ...state.notifications].slice(0, 6),
+      };
+    }),
   setMachineStatus: (machineStatus) => set({ machineStatus, running: machineStatus === "Machining" }),
   setMachineState: (machineState) => set((state) => ({ machineState, unityTelemetry: { ...state.unityTelemetry, machineState } })),
   updateUnityTelemetry: (telemetry) =>
@@ -116,8 +225,8 @@ export const useTwinStore = create<TwinState>((set) => ({
       return {
         unityTelemetry,
         machineState: unityTelemetry.machineState,
-        machineStatus: unityTelemetry.machineState === "MACHINING" ? "Machining" : unityTelemetry.machineState === "OFFLINE" ? "Idle" : state.machineStatus,
-        running: unityTelemetry.machineState === "MACHINING" ? true : unityTelemetry.machineState === "OFFLINE" ? false : state.running,
+        machineStatus: unityTelemetry.machineState === "MACHINING" ? "Machining" : unityTelemetry.machineState === "OFFLINE" || unityTelemetry.machineState === "STOPPED" ? "Idle" : state.machineStatus,
+        running: unityTelemetry.machineState === "MACHINING" ? true : unityTelemetry.machineState === "OFFLINE" || unityTelemetry.machineState === "STOPPED" ? false : state.running,
       };
     }),
   applyLiveTelemetry: ({ telemetry, parameters, metrics }) =>
@@ -126,7 +235,8 @@ export const useTwinStore = create<TwinState>((set) => ({
       const nextParameters = parameters ? { ...state.parameters, ...parameters } : state.parameters;
       const calculatedMetrics = parameters ? calculateDerivedMetrics(nextParameters, state.elapsedSeconds) : state.metrics;
       const nextMetrics = { ...calculatedMetrics, ...metrics };
-      const machineStatus = unityTelemetry.machineState === "MACHINING" ? "Machining" : unityTelemetry.machineState === "OFFLINE" ? "Idle" : state.machineStatus;
+      const machineStatus = unityTelemetry.machineState === "MACHINING" ? "Machining" : unityTelemetry.machineState === "OFFLINE" || unityTelemetry.machineState === "STOPPED" ? "Idle" : state.machineStatus;
+      if (parameters) persistMachineSettings(nextParameters);
 
       return {
         parameters: nextParameters,
@@ -138,16 +248,26 @@ export const useTwinStore = create<TwinState>((set) => ({
         machineState: unityTelemetry.machineState,
         machineStatus,
         running: machineStatus === "Machining",
-        history: [...state.history.slice(-119), pointFromState(Math.round(unityTelemetry.machineTimeSeconds || state.elapsedSeconds), nextParameters, nextMetrics)],
+        history: [...state.history.slice(-119), pointFromState(Math.round(unityTelemetry.elapsedTimeSeconds || unityTelemetry.machineTimeSeconds || state.elapsedSeconds), nextParameters, nextMetrics)],
       };
     }),
   setRealtimeDiagnostics: (diagnostics) => set({ diagnostics }),
+  addEvent: (level, category, message) =>
+    set((state) => {
+      const eventLog = [buildEvent(level, category, message), ...state.eventLog].slice(0, 100);
+      safeWriteJson(persistedEventsKey, eventLog);
+      return { eventLog };
+    }),
+  pushNotification: (level, message) => set((state) => ({ notifications: [buildNotification(level, message), ...state.notifications].slice(0, 6) })),
+  dismissNotification: (id) => set((state) => ({ notifications: state.notifications.filter((notification) => notification.id !== id) })),
   setRole: (role) => set({ role }),
   updatePendingParameter: (key, value) =>
     set((state) => {
       const pendingParameters = { ...state.pendingParameters, [key]: value };
       const metrics = compareWhatIf(state.parameters, pendingParameters, state.elapsedSeconds).predicted;
-      return { pendingParameters, pendingDirty: true, validation: validateParameterSet(pendingParameters, metrics) };
+      const eventLog = [buildEvent("INFO", "PARAMETER", `Pending parameter ${String(key)} changed.`), ...state.eventLog].slice(0, 100);
+      safeWriteJson(persistedEventsKey, eventLog);
+      return { pendingParameters, pendingDirty: true, validation: validateParameterSet(pendingParameters, metrics), eventLog };
     }),
   incrementPendingParameter: (key, delta) =>
     set((state) => {
@@ -160,12 +280,21 @@ export const useTwinStore = create<TwinState>((set) => ({
   applyToTwin: () =>
     set((state) => {
       const metrics = calculateDerivedMetrics(state.pendingParameters, state.elapsedSeconds);
+      persistMachineSettings(state.pendingParameters);
+      const alarms = buildAlarms(state.pendingParameters, metrics);
+      const alarmHistory = [...alarms.map((alarm) => ({ ...alarm, timestamp: new Date().toISOString() })), ...state.alarmHistory].slice(0, 200);
+      const eventLog = [buildEvent("INFO", "PARAMETER", "Parameters applied to digital twin."), ...state.eventLog].slice(0, 100);
+      safeWriteJson(persistedEventsKey, eventLog);
+      safeWriteJson(persistedAlarmsKey, alarmHistory);
       return {
         parameters: state.pendingParameters,
         metrics,
         pendingDirty: false,
         validation: validateParameterSet(state.pendingParameters, metrics),
-        alarms: buildAlarms(state.pendingParameters, metrics),
+        alarms,
+        alarmHistory,
+        eventLog,
+        notifications: [buildNotification("INFO", "Parameters Applied"), ...state.notifications].slice(0, 6),
       };
     }),
   tick: () =>
@@ -184,13 +313,14 @@ export const useTwinStore = create<TwinState>((set) => ({
         pressure: bounded("pressure", state.parameters.pressure + Math.cos(phase * 0.6) * 0.006),
       };
       const metrics = calculateDerivedMetrics(parameters, elapsedSeconds);
+      const alarms = buildAlarms(parameters, metrics);
       return {
         elapsedSeconds,
         parameters,
         pendingParameters: state.pendingDirty ? state.pendingParameters : parameters,
         metrics,
         validation: validateParameterSet(parameters, metrics),
-        alarms: buildAlarms(parameters, metrics),
+        alarms,
         history: [...state.history.slice(-119), pointFromState(elapsedSeconds, parameters, metrics)],
       };
     }),

@@ -32,10 +32,14 @@ namespace EDMDigitalTwin.Networking
         public string role;
         public string command;
         public string status;
+        public string machineState;
         public string view;
         public string messageId;
         public string detail;
         public string code;
+        public float elapsedTimeSeconds;
+        public float remainingTimeSeconds;
+        public float progressPercent;
     }
 
     public static class GatewayMessageFactory
@@ -70,7 +74,7 @@ namespace EDMDigitalTwin.Networking
             };
         }
 
-        public static GatewayMessage UnityState(string status)
+        public static GatewayMessage UnityState(string status, string machineState = "READY", float elapsedTimeSeconds = 0f, float remainingTimeSeconds = 0f, float progressPercent = 0f)
         {
             return new GatewayMessage
             {
@@ -80,7 +84,11 @@ namespace EDMDigitalTwin.Networking
                 type = GatewayMessageTypes.UnityState,
                 payload = new MessagePayload
                 {
-                    status = status
+                    status = status,
+                    machineState = machineState,
+                    elapsedTimeSeconds = elapsedTimeSeconds,
+                    remainingTimeSeconds = remainingTimeSeconds,
+                    progressPercent = progressPercent
                 }
             };
         }

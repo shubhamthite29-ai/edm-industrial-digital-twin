@@ -6,18 +6,13 @@ export type DataMode = "simulation" | "live-unity";
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
 export type MachineStatus = "Idle" | "Machining";
 export type MachineLifecycleState =
-  | "BOOTING"
   | "READY"
-  | "WAITING_FOR_PARAMETERS"
-  | "READY_TO_START"
   | "STARTING"
-  | "POSITIONING_TANK"
-  | "LOWERING_TOOL"
   | "MACHINING"
-  | "RETRACTING"
-  | "RETURNING_TANK"
-  | "COMPLETED"
-  | "FAULT"
+  | "PAUSED"
+  | "STOPPED"
+  | "HOMING"
+  | "RESETTING"
   | "EMERGENCY_STOP"
   | "OFFLINE";
 
@@ -74,6 +69,8 @@ export interface Alarm {
   level: AlarmLevel;
   message: string;
   source: string;
+  timestamp?: string;
+  acknowledged?: boolean;
 }
 
 export interface HistoryPoint extends DerivedMetrics {
@@ -95,10 +92,31 @@ export interface ValidationResult {
 export interface UnityTelemetry {
   machineState: MachineLifecycleState;
   cyclePercent: number;
+  progressPercent: number;
   toolPosition: number;
   tankPosition: number;
   sparkActive: boolean;
   machineTimeSeconds: number;
+  elapsedTimeSeconds: number;
+  remainingTimeSeconds: number;
 }
 
 export type CameraView = "front" | "top" | "side" | "tool" | "isometric" | "free";
+
+export type EventLogLevel = "INFO" | "WARNING" | "CRITICAL" | "EMERGENCY";
+export type EventLogCategory = "COMMAND" | "PARAMETER" | "CONNECTION" | "ALARM" | "SYSTEM";
+
+export interface EventLogEntry {
+  id: string;
+  timestamp: string;
+  level: EventLogLevel;
+  category: EventLogCategory;
+  message: string;
+}
+
+export interface DashboardNotification {
+  id: string;
+  timestamp: string;
+  level: EventLogLevel;
+  message: string;
+}

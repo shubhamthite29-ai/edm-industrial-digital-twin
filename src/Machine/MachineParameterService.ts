@@ -1,4 +1,5 @@
 import { realtimeClient, type GatewayMessage, type RealtimeClient } from "../Realtime/RealtimeClient";
+import { useTwinStore } from "../store/useTwinStore";
 import type { MachineParameters } from "../types/twin";
 
 export interface MachineParametersPatchPayload {
@@ -42,7 +43,12 @@ export class MachineParameterService {
       payload: payload as unknown as Record<string, unknown>,
     };
 
-    return this.client.send(message);
+    const sent = this.client.send(message);
+    if (sent) {
+      useTwinStore.getState().addEvent("INFO", "PARAMETER", `Parameters sent to Unity: ${payload.currentA}A, ${payload.voltageV}V, gap ${payload.gapVoltageV}V.`);
+      useTwinStore.getState().pushNotification("INFO", "Parameters Applied");
+    }
+    return sent;
   }
 }
 

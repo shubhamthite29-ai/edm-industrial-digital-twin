@@ -11,6 +11,8 @@ export const MESSAGE_TYPES = {
   HEARTBEAT: "heartbeat",
   ACK: "ack",
   ERROR: "error",
+  CLIENT_STATUS: "client.status",
+  GATEWAY_STATUS: "gateway.status",
   MACHINE_COMMAND: "machine.command",
   MACHINE_PARAMETERS_PATCH: "machine.parameters.patch",
   CAMERA_COMMAND: "camera.command",

@@ -103,6 +103,13 @@ function connectionLabel(status: ConnectionStatus) {
   return "Disconnected";
 }
 
+function secondsLabel(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "00:00";
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function ShellHeader() {
   const running = useTwinStore((state) => state.running);
   const setRunning = useTwinStore((state) => state.setRunning);
@@ -333,8 +340,10 @@ function LiveCommandPanel() {
           ))}
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-          <StatusPill label={`State ${machineState}`} tone={machineState === "MACHINING" ? "green" : machineState === "EMERGENCY_STOP" || machineState === "FAULT" ? "red" : "cyan"} />
-          <StatusPill label={`Cycle ${fmt(telemetry.cyclePercent, 0)}%`} tone="amber" />
+          <StatusPill label={`State ${machineState}`} tone={machineState === "MACHINING" ? "green" : machineState === "EMERGENCY_STOP" ? "red" : "cyan"} />
+          <StatusPill label={`Progress ${fmt(telemetry.progressPercent || telemetry.cyclePercent, 0)}%`} tone="amber" />
+          <StatusPill label={`Elapsed ${secondsLabel(telemetry.elapsedTimeSeconds)}`} tone="cyan" />
+          <StatusPill label={`Remaining ${secondsLabel(telemetry.remainingTimeSeconds)}`} tone="amber" />
           <StatusPill label={`Tool ${fmt(telemetry.toolPosition, 2)}`} tone="violet" />
           <StatusPill label={`Spark ${telemetry.sparkActive ? "On" : "Off"}`} tone={telemetry.sparkActive ? "green" : "red"} />
         </div>
@@ -694,6 +703,7 @@ function AnalyticsReports() {
 
 function AlarmCenter() {
   const alarms = useTwinStore((state) => state.alarms);
+  const alarmHistory = useTwinStore((state) => state.alarmHistory);
   return (
     <Panel title="Alarm Center" eyebrow="Thresholds from implementation guide" accent={alarms.length ? "red" : "green"}>
       <div className="space-y-2">
@@ -715,6 +725,17 @@ function AlarmCenter() {
             </div>
           ))
         )}
+        {alarmHistory.slice(0, 8).map((alarm, index) => (
+          <div key={`${alarm.id}-${alarm.timestamp ?? index}`} className="flex items-start gap-3 rounded border border-plant-line bg-plant-void p-3">
+            <AlertTriangle className={alarm.level === "CRITICAL" ? "text-plant-red" : "text-plant-amber"} size={16} />
+            <div>
+              <div className="text-xs font-semibold uppercase text-plant-muted">
+                History / {alarm.level} / {alarm.timestamp ? new Date(alarm.timestamp).toLocaleTimeString() : "recorded"}
+              </div>
+              <div className="mt-1 text-sm text-plant-text">{alarm.message}</div>
+            </div>
+          </div>
+        ))}
       </div>
     </Panel>
   );
@@ -785,6 +806,7 @@ function DeveloperDiagnostics() {
             <MetricCard label="Packets Received" value={`${diagnostics.packetsReceived}`} unit="" tone="green" sublabel="Gateway inbound" />
             <MetricCard label="Reconnects" value={`${diagnostics.reconnectCount}`} unit="" tone={diagnostics.reconnectCount > 0 ? "amber" : "green"} sublabel="Socket recovery" />
             <MetricCard label="Machine Link" value={connectionStatus === "connected" && machineState !== "OFFLINE" ? "OK" : "WAIT"} unit="" tone={connectionStatus === "connected" ? "green" : "amber"} sublabel="React-Gateway-Unity" />
+            <MetricCard label="Quality" value={diagnostics.latencyMs == null ? "WAIT" : diagnostics.latencyMs < 120 ? "GOOD" : "SLOW"} unit="" tone={diagnostics.latencyMs == null ? "amber" : diagnostics.latencyMs < 120 ? "green" : "red"} sublabel="Connection quality" />
           </div>
           <div className="flex flex-wrap gap-2">
             <button className="rounded bg-plant-cyan px-3 py-2 text-xs font-semibold uppercase text-plant-void" onClick={pingGateway} type="button">Ping</button>
@@ -807,6 +829,60 @@ function DeveloperDiagnostics() {
         <div className="text-sm text-plant-muted">Developer Mode is hidden. Enable it only while testing gateway, Unity, and packet flow.</div>
       )}
     </Panel>
+  );
+}
+
+function EventLogPanel() {
+  const eventLog = useTwinStore((state) => state.eventLog);
+
+  return (
+    <Panel title="Industrial Event Log" eyebrow="Commands, parameters, connections, alarms" accent="amber">
+      <div className="max-h-80 overflow-auto rounded border border-plant-line bg-plant-void">
+        {eventLog.length === 0 ? (
+          <div className="p-4 text-sm text-plant-muted">No events recorded yet.</div>
+        ) : (
+          eventLog.slice(0, 24).map((entry) => (
+            <div key={entry.id} className="grid gap-2 border-b border-plant-line px-3 py-2 font-mono text-[11px] text-plant-muted md:grid-cols-[170px_95px_110px_1fr]">
+              <span>{new Date(entry.timestamp).toLocaleString()}</span>
+              <span className={entry.level === "EMERGENCY" || entry.level === "CRITICAL" ? "text-plant-red" : entry.level === "WARNING" ? "text-plant-amber" : "text-plant-green"}>{entry.level}</span>
+              <span className="text-plant-cyan">{entry.category}</span>
+              <span className="text-plant-text">{entry.message}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function NotificationStack() {
+  const notifications = useTwinStore((state) => state.notifications);
+  const dismissNotification = useTwinStore((state) => state.dismissNotification);
+
+  if (notifications.length === 0) return null;
+
+  return (
+    <div className="fixed right-4 top-20 z-50 w-[min(360px,calc(100vw-2rem))] space-y-2">
+      {notifications.map((notification) => (
+        <div
+          key={notification.id}
+          className={`rounded border px-3 py-2 shadow-glow ${
+            notification.level === "EMERGENCY" || notification.level === "CRITICAL"
+              ? "border-plant-red bg-plant-red/20 text-plant-red"
+              : notification.level === "WARNING"
+                ? "border-plant-amber bg-plant-amber/20 text-plant-amber"
+                : "border-plant-cyan bg-plant-panel text-plant-cyan"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold uppercase tracking-wide">{notification.message}</div>
+            <button className="text-plant-muted hover:text-plant-text" onClick={() => dismissNotification(notification.id)} type="button" aria-label="Dismiss notification">
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -849,6 +925,7 @@ function Dashboard({ active }: { active: string }) {
             </div>
           </Panel>
           <DeveloperDiagnostics />
+          <EventLogPanel />
         </>
       ) : null}
       <div className="grid gap-3 md:grid-cols-4">
@@ -874,6 +951,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-plant-void text-plant-text">
+      <NotificationStack />
       <div className="flex min-h-screen">
         <Sidebar active={active} />
         <div className="min-w-0 flex-1">

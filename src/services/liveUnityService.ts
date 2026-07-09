@@ -18,18 +18,13 @@ function normalizeMachineState(value: unknown): MachineLifecycleState | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toUpperCase();
   const states: MachineLifecycleState[] = [
-    "BOOTING",
     "READY",
-    "WAITING_FOR_PARAMETERS",
-    "READY_TO_START",
     "STARTING",
-    "POSITIONING_TANK",
-    "LOWERING_TOOL",
     "MACHINING",
-    "RETRACTING",
-    "RETURNING_TANK",
-    "COMPLETED",
-    "FAULT",
+    "PAUSED",
+    "STOPPED",
+    "HOMING",
+    "RESETTING",
     "EMERGENCY_STOP",
     "OFFLINE",
   ];
@@ -55,10 +50,13 @@ function handleMessage(message: GatewayMessage) {
   const telemetry = {
     machineState: machineState ?? previousTelemetry.machineState,
     cyclePercent: numberFromPayload(message.payload?.cyclePercent) ?? previousTelemetry.cyclePercent,
+    progressPercent: numberFromPayload(message.payload?.progressPercent ?? message.payload?.progress) ?? previousTelemetry.progressPercent,
     toolPosition: numberFromPayload(message.payload?.toolPosition) ?? previousTelemetry.toolPosition,
     tankPosition: numberFromPayload(message.payload?.tankPosition) ?? previousTelemetry.tankPosition,
     sparkActive: booleanFromPayload(message.payload?.sparkActive) ?? previousTelemetry.sparkActive,
     machineTimeSeconds: numberFromPayload(message.payload?.machineTimeSeconds) ?? previousTelemetry.machineTimeSeconds,
+    elapsedTimeSeconds: numberFromPayload(message.payload?.elapsedTimeSeconds ?? message.payload?.elapsedTime) ?? previousTelemetry.elapsedTimeSeconds,
+    remainingTimeSeconds: numberFromPayload(message.payload?.remainingTimeSeconds ?? message.payload?.remainingTime) ?? previousTelemetry.remainingTimeSeconds,
   };
 
   const parameters: Partial<MachineParameters> = {};
@@ -91,6 +89,11 @@ function handleMessage(message: GatewayMessage) {
   if (status) {
     useTwinStore.getState().setMachineStatus(status);
   }
+
+  if (machineState && machineState !== previousTelemetry.machineState) {
+    useTwinStore.getState().addEvent(machineState === "EMERGENCY_STOP" ? "EMERGENCY" : "INFO", "SYSTEM", `Unity machine state changed to ${machineState}.`);
+    useTwinStore.getState().pushNotification(machineState === "EMERGENCY_STOP" ? "EMERGENCY" : "INFO", `Machine ${machineState}`);
+  }
 }
 
 export function initializeLiveUnityService() {
@@ -99,6 +102,9 @@ export function initializeLiveUnityService() {
 
   realtimeClient.onStatusChange((status) => {
     useTwinStore.getState().setConnectionStatus(status);
+    if (status === "connected") {
+      machineCommandService.requestStatus();
+    }
   });
 
   realtimeClient.onDiagnostics((diagnostics) => {
@@ -106,6 +112,13 @@ export function initializeLiveUnityService() {
   });
 
   realtimeClient.onMessage(handleMessage);
+  realtimeClient.onMessage((message) => {
+    if (message.type === "client.status") {
+      const role = typeof message.payload?.role === "string" ? message.payload.role : "client";
+      const status = typeof message.payload?.status === "string" ? message.payload.status : "updated";
+      useTwinStore.getState().addEvent("INFO", "CONNECTION", `${role} ${status}.`);
+    }
+  });
   realtimeClient.connect();
 }
 
@@ -113,6 +126,8 @@ export function startLiveMachining() {
   const sent = machineCommandService.startMachining();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Machining");
+    useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Start command sent.");
+    useTwinStore.getState().pushNotification("INFO", "Machine Started");
   }
   return sent;
 }
@@ -121,6 +136,8 @@ export function stopLiveMachining() {
   const sent = machineCommandService.stopMachining();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Idle");
+    useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Stop command sent.");
+    useTwinStore.getState().pushNotification("INFO", "Machine Stopped");
   }
   return sent;
 }
@@ -129,28 +146,44 @@ export function resetLiveMachine() {
   const sent = machineCommandService.resetMachine();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Idle");
+    useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Reset command sent.");
+    useTwinStore.getState().pushNotification("INFO", "Machine Reset");
   }
   return sent;
 }
 
 export function homeLiveMachine() {
-  return machineCommandService.homeMachine();
+  const sent = machineCommandService.homeMachine();
+  if (sent) useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Home command sent.");
+  return sent;
 }
 
 export function emergencyStopLiveMachine() {
   const sent = machineCommandService.emergencyStop();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Idle");
+    useTwinStore.getState().addEvent("EMERGENCY", "COMMAND", "Emergency Stop command sent.");
+    useTwinStore.getState().pushNotification("EMERGENCY", "Emergency Stop");
   }
   return sent;
 }
 
 export function pauseLiveMachine() {
-  return machineCommandService.pauseMachining();
+  const sent = machineCommandService.pauseMachining();
+  if (sent) {
+    useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Pause command sent.");
+    useTwinStore.getState().pushNotification("INFO", "Machine Paused");
+  }
+  return sent;
 }
 
 export function resumeLiveMachine() {
-  return machineCommandService.resumeMachining();
+  const sent = machineCommandService.resumeMachining();
+  if (sent) {
+    useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Resume command sent.");
+    useTwinStore.getState().pushNotification("INFO", "Machine Resumed");
+  }
+  return sent;
 }
 
 export function requestLiveStatus() {

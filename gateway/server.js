@@ -55,6 +55,27 @@ function broadcast(message, targetRoles, senderId) {
   return delivered;
 }
 
+function broadcastClientStatus(role, status, clientId) {
+  broadcast(
+    {
+      schemaVersion: "1.0",
+      messageId: randomUUID(),
+      timestamp: new Date().toISOString(),
+      source: "gateway",
+      type: MESSAGE_TYPES.CLIENT_STATUS,
+      payload: {
+        role,
+        status,
+        clientId,
+        reactClients: countByRole(CLIENT_ROLES.REACT),
+        unityClients: countByRole(CLIENT_ROLES.UNITY),
+      },
+    },
+    [CLIENT_ROLES.REACT, CLIENT_ROLES.UNITY],
+    null,
+  );
+}
+
 function registerClient(socket, request) {
   const id = randomUUID();
   const client = {
@@ -97,6 +118,7 @@ function registerClient(socket, request) {
 
   socket.on("close", (code, reason) => {
     clients.delete(id);
+    broadcastClientStatus(client.role, "disconnected", id);
     log("info", "Client disconnected.", {
       clientId: id,
       role: client.role,
@@ -135,6 +157,7 @@ function handleMessage(client, rawMessage) {
     const role = getRoleFromHello(parsed.message);
     if (role) client.role = role;
     send(client, createAck(parsed.message.messageId, "registered"));
+    broadcastClientStatus(client.role, "connected", client.id);
     log("info", "Client registered role.", { clientId: client.id, role: client.role });
     return;
   }

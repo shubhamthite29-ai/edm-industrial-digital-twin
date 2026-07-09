@@ -123,6 +123,9 @@ Unity to React telemetry:
     "voltageV": 90,
     "gapVoltageV": 72,
     "cyclePercent": 25,
+    "progressPercent": 25,
+    "elapsedTimeSeconds": 120,
+    "remainingTimeSeconds": 360,
     "sparkActive": true
   }
 }
