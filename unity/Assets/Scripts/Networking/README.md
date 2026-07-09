@@ -1,6 +1,10 @@
 # Unity Networking Layer
 
-Sprint 2 networking-only module for connecting Unity 6 to the Sprint 1 Node.js WebSocket Gateway.
+Dependency-free Unity networking module for connecting Unity 6 to the Node.js WebSocket Gateway at:
+
+```txt
+ws://localhost:8080
+```
 
 ## Files
 
@@ -9,40 +13,57 @@ Assets/Scripts/Networking/
   WebSocketClient.cs
   MessageModels.cs
   MachineManager.cs
+
 Assets/Scripts/Machine/
-  MachineParameters.cs
+  CameraManager.cs
+  DashboardUI.cs
+  MachineEvents.cs
   MachineParameterManager.cs
+  MachineParameters.cs
+  MachineState.cs
+  MachineTelemetryPublisher.cs
 ```
 
 ## Dependency
 
-Install NativeWebSocket in Unity Package Manager.
+No external package is required.
 
-Recommended Git URL:
+Do not install NativeWebSocket.
+
+This implementation uses Unity/.NET built-in:
 
 ```txt
-https://github.com/endel/NativeWebSocket.git#upm
+System.Net.WebSockets.ClientWebSocket
 ```
+
+It is intended for Unity Editor and Standalone builds connecting to the local Node gateway.
 
 ## Scene Setup
 
 1. Create an empty GameObject named `DigitalTwinNetworking`.
 2. Add `WebSocketClient`.
-3. Add `MachineManager` to the same GameObject or assign an existing `MachineManager` reference.
-4. Add `MachineParameterManager` to the same GameObject or assign an existing `MachineParameterManager` reference.
-5. Set `Gateway Url`.
+3. Add `MachineManager`.
+4. Add `MachineParameterManager`.
+5. Add `MachineTelemetryPublisher`.
+6. Assign your existing machine controller component to `MachineManager.machineController`.
+7. Keep `Gateway Url` as `ws://localhost:8080`.
+8. Start the Node gateway before pressing Play in Unity.
 
-Default:
+Your existing controller class may be named `Machinecontroller`, `MachineController`, or another MonoBehaviour name. `MachineManager` uses reflection and only requires that the assigned component has:
 
-```txt
-ws://localhost:8080
+```csharp
+StartMachining()
 ```
 
-The Sprint 1 gateway and this Unity client now both default to `8080`.
+Optional:
 
-## Behavior
+```csharp
+IsRunning
+```
 
-On connection Unity sends:
+## Protocol
+
+Unity sends on connection:
 
 ```json
 {
@@ -53,7 +74,7 @@ On connection Unity sends:
 }
 ```
 
-When Unity receives:
+React to Unity command:
 
 ```json
 {
@@ -64,51 +85,7 @@ When Unity receives:
 }
 ```
 
-it calls:
-
-```csharp
-MachineManager.StartMachining();
-```
-
-For Sprint 3, `StartMachining()` calls:
-
-```csharp
-machineController.StartMachining();
-```
-
-It also sends:
-
-```json
-{
-  "type": "unity.state",
-  "payload": {
-    "status": "machining"
-  }
-}
-```
-
-When the existing machining coroutine finishes, call:
-
-```csharp
-machineManager.NotifyMachiningFinished();
-```
-
-That sends:
-
-```json
-{
-  "type": "unity.state",
-  "payload": {
-    "status": "idle"
-  }
-}
-```
-
-No existing machine animation, spark, tank, or tool behavior should be changed.
-
-## Parameter Synchronization
-
-When Unity receives:
+React to Unity parameters:
 
 ```json
 {
@@ -123,6 +100,36 @@ When Unity receives:
 }
 ```
 
-`WebSocketClient` forwards the packet to `MachineParameterManager`, which updates the shared `MachineParameters` object.
+React to Unity camera:
 
-Other Unity scripts should read from `MachineParameterManager.Current` instead of reading WebSocket messages directly.
+```json
+{
+  "type": "camera.command",
+  "payload": {
+    "view": "front"
+  }
+}
+```
+
+Unity to React telemetry:
+
+```json
+{
+  "type": "unity.state",
+  "payload": {
+    "status": "machining",
+    "machineState": "MACHINING",
+    "currentA": 18,
+    "voltageV": 90,
+    "gapVoltageV": 72,
+    "cyclePercent": 25,
+    "sparkActive": true
+  }
+}
+```
+
+## WebGL Note
+
+Unity WebGL runs WebSockets through the browser JavaScript environment, not `ClientWebSocket`.
+
+This dependency-free implementation compiles without NativeWebSocket and is for Editor/Standalone integration. During the WebGL sprint, keep the same protocol and add a small JavaScript bridge for WebGL builds.

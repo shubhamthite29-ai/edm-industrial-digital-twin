@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Net.WebSockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using EDMDigitalTwin.Machine;
-using NativeWebSocket;
 using UnityEngine;
 
 namespace EDMDigitalTwin.Networking
@@ -23,7 +25,9 @@ namespace EDMDigitalTwin.Networking
         [SerializeField] private bool verboseLogging = true;
 
         private readonly ConcurrentQueue<Action> mainThreadActions = new ConcurrentQueue<Action>();
-        private WebSocket webSocket;
+        private readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
+        private ClientWebSocket webSocket;
+        private CancellationTokenSource socketCancellation;
         private Coroutine reconnectCoroutine;
         private Coroutine heartbeatCoroutine;
         private bool intentionallyClosed;
@@ -66,35 +70,24 @@ namespace EDMDigitalTwin.Networking
 
         private void Update()
         {
-#if !UNITY_WEBGL || UNITY_EDITOR
-            webSocket?.DispatchMessageQueue();
-#endif
-
             while (mainThreadActions.TryDequeue(out Action action))
             {
                 action?.Invoke();
             }
         }
 
-        private async void OnApplicationQuit()
+        private void OnApplicationQuit()
         {
-            intentionallyClosed = true;
-
-            if (heartbeatCoroutine != null)
-            {
-                StopCoroutine(heartbeatCoroutine);
-                heartbeatCoroutine = null;
-            }
-
-            if (webSocket != null)
-            {
-                await webSocket.Close();
-            }
+            Disconnect();
         }
 
         public async void Connect()
         {
-            if (isConnecting || webSocket?.State == WebSocketState.Open)
+#if UNITY_WEBGL && !UNITY_EDITOR
+            Debug.LogWarning("ClientWebSocket is not available in Unity WebGL builds. Use this dependency-free client in Editor/Standalone; add a browser JavaScript bridge for WebGL deployment.");
+            return;
+#else
+            if (isConnecting || IsConnected)
             {
                 return;
             }
@@ -104,21 +97,39 @@ namespace EDMDigitalTwin.Networking
 
             try
             {
-                webSocket = new WebSocket(gatewayUrl);
-                RegisterCallbacks(webSocket);
+                DisposeSocket();
+                socketCancellation = new CancellationTokenSource();
+                webSocket = new ClientWebSocket();
 
                 Log($"Connecting to gateway: {gatewayUrl}");
-                await webSocket.Connect();
+                await webSocket.ConnectAsync(new Uri(gatewayUrl), socketCancellation.Token);
+
+                mainThreadActions.Enqueue(() =>
+                {
+                    Log("Connected to gateway.");
+                    ConnectionChanged?.Invoke(true);
+                    Send(GatewayMessageFactory.ClientHello());
+
+                    if (heartbeatCoroutine != null)
+                    {
+                        StopCoroutine(heartbeatCoroutine);
+                    }
+
+                    heartbeatCoroutine = StartCoroutine(HeartbeatLoop());
+                });
+
+                _ = Task.Run(() => ReceiveLoop(socketCancellation.Token));
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"Gateway connection failed: {exception.Message}");
-                ScheduleReconnect();
+                mainThreadActions.Enqueue(ScheduleReconnect);
             }
             finally
             {
                 isConnecting = false;
             }
+#endif
         }
 
         public async void Disconnect()
@@ -137,89 +148,135 @@ namespace EDMDigitalTwin.Networking
                 heartbeatCoroutine = null;
             }
 
-            if (webSocket != null)
+            try
             {
-                await webSocket.Close();
+                socketCancellation?.Cancel();
+
+                if (webSocket != null && (webSocket.State == WebSocketState.Open || webSocket.State == WebSocketState.CloseReceived))
+                {
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Unity client disconnecting", CancellationToken.None);
+                }
+            }
+            catch (Exception exception)
+            {
+                Log($"Disconnect cleanup skipped: {exception.Message}");
+            }
+            finally
+            {
+                DisposeSocket();
+                ConnectionChanged?.Invoke(false);
             }
         }
 
         public async void Send(GatewayMessage message)
         {
-            if (webSocket == null || webSocket.State != WebSocketState.Open)
+            if (message == null)
             {
-                Debug.LogWarning($"Cannot send {message?.type ?? "message"} because gateway is not connected.");
                 return;
             }
 
-            string json = GatewayMessageFactory.ToJson(message);
-            await webSocket.SendText(json);
-            Log($"Sent: {json}");
+            await SendText(GatewayMessageFactory.ToJson(message), message.type);
         }
 
         public async void SendRawJson(string json)
         {
-            if (webSocket == null || webSocket.State != WebSocketState.Open)
+            await SendText(json, "raw message");
+        }
+
+        private async Task SendText(string json, string label)
+        {
+            if (string.IsNullOrWhiteSpace(json))
             {
-                Debug.LogWarning("Cannot send raw gateway message because gateway is not connected.");
                 return;
             }
 
-            await webSocket.SendText(json);
-            Log($"Sent: {json}");
+            if (!IsConnected)
+            {
+                Debug.LogWarning($"Cannot send {label} because gateway is not connected.");
+                return;
+            }
+
+            await sendLock.WaitAsync();
+
+            try
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(json);
+                await webSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, socketCancellation.Token);
+                Log($"Sent: {json}");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"Failed to send {label}: {exception.Message}");
+                HandleSocketClosed("send failure");
+            }
+            finally
+            {
+                sendLock.Release();
+            }
         }
 
-        private void RegisterCallbacks(WebSocket socket)
+        private async Task ReceiveLoop(CancellationToken cancellationToken)
         {
-            socket.OnOpen += () =>
-            {
-                mainThreadActions.Enqueue(() =>
-                {
-                    Log("Connected to gateway.");
-                    ConnectionChanged?.Invoke(true);
-                    Send(GatewayMessageFactory.ClientHello());
+            byte[] buffer = new byte[8192];
+            var builder = new StringBuilder();
 
-                    if (heartbeatCoroutine != null)
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested && webSocket != null && webSocket.State == WebSocketState.Open)
+                {
+                    WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+
+                    if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        StopCoroutine(heartbeatCoroutine);
+                        break;
                     }
 
-                    heartbeatCoroutine = StartCoroutine(HeartbeatLoop());
-                });
-            };
+                    builder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
 
-            socket.OnMessage += bytes =>
-            {
-                string json = Encoding.UTF8.GetString(bytes);
-                mainThreadActions.Enqueue(() => HandleIncomingMessage(json));
-            };
-
-            socket.OnError += error =>
-            {
-                mainThreadActions.Enqueue(() =>
-                {
-                    Debug.LogWarning($"Gateway socket error: {error}");
-                });
-            };
-
-            socket.OnClose += code =>
-            {
-                mainThreadActions.Enqueue(() =>
-                {
-                    Log($"Gateway connection closed with code {code}.");
-                    ConnectionChanged?.Invoke(false);
-
-                    if (heartbeatCoroutine != null)
+                    if (!result.EndOfMessage)
                     {
-                        StopCoroutine(heartbeatCoroutine);
-                        heartbeatCoroutine = null;
+                        continue;
                     }
 
-                    if (!intentionallyClosed)
-                    {
-                        ScheduleReconnect();
-                    }
-                });
-            };
+                    string json = builder.ToString();
+                    builder.Length = 0;
+                    mainThreadActions.Enqueue(() => HandleIncomingMessage(json));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during normal disconnect.
+            }
+            catch (Exception exception)
+            {
+                mainThreadActions.Enqueue(() => Debug.LogWarning($"Gateway receive loop failed: {exception.Message}"));
+            }
+            finally
+            {
+                mainThreadActions.Enqueue(() => HandleSocketClosed("receive loop ended"));
+            }
+        }
+
+        private void HandleSocketClosed(string reason)
+        {
+            if (heartbeatCoroutine != null)
+            {
+                StopCoroutine(heartbeatCoroutine);
+                heartbeatCoroutine = null;
+            }
+
+            if (webSocket != null)
+            {
+                Log($"Gateway connection closed: {reason}.");
+            }
+
+            DisposeSocket();
+            ConnectionChanged?.Invoke(false);
+
+            if (!intentionallyClosed)
+            {
+                ScheduleReconnect();
+            }
         }
 
         private void HandleIncomingMessage(string json)
@@ -345,7 +402,7 @@ namespace EDMDigitalTwin.Networking
         {
             var wait = new WaitForSeconds(heartbeatIntervalSeconds);
 
-            while (webSocket != null && webSocket.State == WebSocketState.Open)
+            while (IsConnected)
             {
                 Send(GatewayMessageFactory.Heartbeat());
                 yield return wait;
@@ -368,7 +425,7 @@ namespace EDMDigitalTwin.Networking
             {
                 yield return new WaitForSeconds(reconnectDelaySeconds);
 
-                if (webSocket == null || webSocket.State == WebSocketState.Closed)
+                if (!IsConnected && !isConnecting)
                 {
                     Log("Attempting gateway reconnect.");
                     reconnectCoroutine = null;
@@ -378,6 +435,32 @@ namespace EDMDigitalTwin.Networking
             }
 
             reconnectCoroutine = null;
+        }
+
+        private void DisposeSocket()
+        {
+            try
+            {
+                socketCancellation?.Cancel();
+                socketCancellation?.Dispose();
+            }
+            catch
+            {
+                // Ignore cleanup exceptions.
+            }
+
+            socketCancellation = null;
+
+            try
+            {
+                webSocket?.Dispose();
+            }
+            catch
+            {
+                // Ignore cleanup exceptions.
+            }
+
+            webSocket = null;
         }
 
         private void Log(string message)

@@ -1,11 +1,13 @@
 using UnityEngine;
 using EDMDigitalTwin.Machine;
+using System.Reflection;
 
 namespace EDMDigitalTwin.Networking
 {
     public class MachineManager : MonoBehaviour
     {
-        public MachineController machineController;
+        [Tooltip("Assign your existing Machinecontroller/MachineController component here.")]
+        public MonoBehaviour machineController;
 
         [SerializeField] private WebSocketClient webSocketClient;
         [SerializeField] private MachineState currentState = MachineState.READY;
@@ -29,7 +31,7 @@ namespace EDMDigitalTwin.Networking
                 return;
             }
 
-            if (IsRunning || machineController.IsRunning)
+            if (IsRunning || IsControllerRunning())
             {
                 Debug.Log("Start command ignored because the machine cycle is already running.");
                 return;
@@ -38,7 +40,7 @@ namespace EDMDigitalTwin.Networking
             IsRunning = true;
             SetMachineState(MachineState.MACHINING);
             MachineEvents.RaiseMachineStarted();
-            machineController.StartMachining();
+            InvokeControllerMethod("StartMachining");
         }
 
         public void StopMachining()
@@ -130,6 +132,46 @@ namespace EDMDigitalTwin.Networking
             }
 
             webSocketClient.Send(GatewayMessageFactory.UnityState(status));
+        }
+
+        private bool IsControllerRunning()
+        {
+            if (machineController == null)
+            {
+                return false;
+            }
+
+            PropertyInfo property = machineController.GetType().GetProperty("IsRunning", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.PropertyType == typeof(bool))
+            {
+                return (bool)property.GetValue(machineController);
+            }
+
+            FieldInfo field = machineController.GetType().GetField("IsRunning", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field != null && field.FieldType == typeof(bool))
+            {
+                return (bool)field.GetValue(machineController);
+            }
+
+            return false;
+        }
+
+        private void InvokeControllerMethod(string methodName)
+        {
+            if (machineController == null)
+            {
+                Debug.LogWarning($"Cannot call {methodName} because machineController is not assigned.");
+                return;
+            }
+
+            MethodInfo method = machineController.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (method == null)
+            {
+                Debug.LogWarning($"Assigned machine controller does not contain method {methodName}().");
+                return;
+            }
+
+            method.Invoke(machineController, null);
         }
     }
 }
