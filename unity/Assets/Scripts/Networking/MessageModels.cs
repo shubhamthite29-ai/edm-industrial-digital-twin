@@ -8,6 +8,7 @@ namespace EDMDigitalTwin.Networking
         public const string ClientHello = "client.hello";
         public const string Heartbeat = "heartbeat";
         public const string MachineCommand = "machine.command";
+        public const string UnityState = "unity.state";
         public const string Ack = "ack";
         public const string Error = "error";
     }
@@ -59,6 +60,21 @@ namespace EDMDigitalTwin.Networking
                 timestamp = DateTime.UtcNow.ToString("O"),
                 source = "unity",
                 type = GatewayMessageTypes.Heartbeat,
+                payload = new MessagePayload
+                {
+                    status = status
+                }
+            };
+        }
+
+        public static GatewayMessage UnityState(string status)
+        {
+            return new GatewayMessage
+            {
+                messageId = Guid.NewGuid().ToString(),
+                timestamp = DateTime.UtcNow.ToString("O"),
+                source = "unity",
+                type = GatewayMessageTypes.UnityState,
                 payload = new MessagePayload
                 {
                     status = status

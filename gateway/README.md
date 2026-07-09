@@ -26,14 +26,14 @@ npm start
 Default URL:
 
 ```txt
-ws://localhost:8787
+ws://localhost:8080
 ```
 
 Optional environment variables:
 
 ```txt
 HOST=0.0.0.0
-PORT=8787
+PORT=8080
 HEARTBEAT_INTERVAL_MS=30000
 ```
 
@@ -42,8 +42,8 @@ HEARTBEAT_INTERVAL_MS=30000
 Clients may identify themselves in either way:
 
 ```txt
-ws://localhost:8787?role=react
-ws://localhost:8787?role=unity
+ws://localhost:8080?role=react
+ws://localhost:8080?role=unity
 ```
 
 Or after connecting:

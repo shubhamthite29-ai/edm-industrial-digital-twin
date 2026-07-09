@@ -15,7 +15,7 @@ import {
 } from "./protocol.js";
 
 const host = process.env.HOST ?? "0.0.0.0";
-const port = Number(process.env.PORT ?? 8787);
+const port = Number(process.env.PORT ?? 8080);
 const heartbeatIntervalMs = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30000);
 
 const clients = new Map();

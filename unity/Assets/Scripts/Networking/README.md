@@ -34,18 +34,7 @@ Default:
 ws://localhost:8080
 ```
 
-The Sprint 1 gateway currently defaults to `8787`, so either:
-
-```powershell
-$env:PORT=8080
-npm start
-```
-
-or set Unity's `Gateway Url` to:
-
-```txt
-ws://localhost:8787
-```
+The Sprint 1 gateway and this Unity client now both default to `8080`.
 
 ## Behavior
 
@@ -77,10 +66,38 @@ it calls:
 MachineManager.StartMachining();
 ```
 
-For Sprint 2, `StartMachining()` only logs:
+For Sprint 3, `StartMachining()` calls:
 
-```txt
-Machine cycle started
+```csharp
+machineController.StartMachining();
 ```
 
-No existing machine animation, spark, tank, or tool scripts are modified.
+It also sends:
+
+```json
+{
+  "type": "unity.state",
+  "payload": {
+    "status": "machining"
+  }
+}
+```
+
+When the existing machining coroutine finishes, call:
+
+```csharp
+machineManager.NotifyMachiningFinished();
+```
+
+That sends:
+
+```json
+{
+  "type": "unity.state",
+  "payload": {
+    "status": "idle"
+  }
+}
+```
+
+No existing machine animation, spark, tank, or tool behavior should be changed.
