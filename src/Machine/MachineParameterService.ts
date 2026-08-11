@@ -8,8 +8,12 @@ export interface MachineParametersPatchPayload {
   gapVoltageV: number;
   pulseOnUs: number;
   pulseOffUs: number;
+  gapDistanceMm: number;
   servoFeedPercent: number;
   flushingPressureBar: number;
+  flowRateLpm: number;
+  conductivityUsCm: number;
+  openCircuitVoltageV: number;
   toolDiameterMm: number;
   workpieceMaterial: string;
   electrodeMaterial: string;
@@ -26,8 +30,12 @@ export class MachineParameterService {
       gapVoltageV: parameters.gapVoltage,
       pulseOnUs: parameters.pulseOn,
       pulseOffUs: parameters.pulseOff,
+      gapDistanceMm: parameters.gapDistance,
       servoFeedPercent: parameters.servoFeed,
       flushingPressureBar: parameters.pressure,
+      flowRateLpm: parameters.flowRate,
+      conductivityUsCm: parameters.conductivity,
+      openCircuitVoltageV: parameters.openCircuitVoltage,
       toolDiameterMm: parameters.toolDiameter,
       workpieceMaterial: parameters.workpieceMaterial,
       electrodeMaterial: parameters.electrodeMaterial,

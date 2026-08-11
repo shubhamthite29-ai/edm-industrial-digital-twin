@@ -10,6 +10,9 @@ import type {
   EventLogEntry,
   EventLogLevel,
   HistoryPoint,
+  CameraView,
+  DatasetSample,
+  DatasetState,
   MachineLifecycleState,
   MachineParameters,
   MachineStatus,
@@ -26,6 +29,7 @@ interface TwinState {
   machineStatus: MachineStatus;
   machineState: MachineLifecycleState;
   unityTelemetry: UnityTelemetry;
+  cameraView: CameraView;
   diagnostics: RealtimeDiagnostics;
   role: UserRole;
   elapsedSeconds: number;
@@ -39,11 +43,18 @@ interface TwinState {
   eventLog: EventLogEntry[];
   notifications: DashboardNotification[];
   history: HistoryPoint[];
+  dataset: DatasetState;
   setRunning: (running: boolean) => void;
   setDataMode: (dataMode: DataMode) => void;
+  loadDataset: (fileName: string, headers: string[], rows: DatasetSample[]) => void;
+  clearDataset: () => void;
+  setDatasetPlaying: (playing: boolean) => void;
+  restartDataset: () => void;
+  advanceDataset: () => void;
   setConnectionStatus: (connectionStatus: ConnectionStatus) => void;
   setMachineStatus: (machineStatus: MachineStatus) => void;
   setMachineState: (machineState: MachineLifecycleState) => void;
+  setCameraView: (cameraView: CameraView) => void;
   updateUnityTelemetry: (telemetry: Partial<UnityTelemetry>) => void;
   applyLiveTelemetry: (payload: {
     telemetry?: Partial<UnityTelemetry>;
@@ -97,6 +108,7 @@ function safeWriteJson(key: string, value: unknown) {
 
 function persistMachineSettings(parameters: MachineParameters) {
   safeWriteJson(persistedSettingsKey, {
+    ...parameters,
     current: parameters.current,
     voltage: parameters.voltage,
     gapVoltage: parameters.gapVoltage,
@@ -151,15 +163,96 @@ function bounded<K extends keyof typeof numericBounds>(key: K, value: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function pointFromState(t: number, parameters: MachineParameters, metrics: DerivedMetrics): HistoryPoint {
+function roundEditable(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function pointFromState(t: number | string, parameters: MachineParameters, metrics: DerivedMetrics): HistoryPoint {
   return {
     t,
     ...metrics,
     voltage: parameters.voltage,
     current: parameters.current,
+    gapVoltage: parameters.gapVoltage,
+    pulseOn: parameters.pulseOn,
+    pulseOff: parameters.pulseOff,
     pressure: parameters.pressure,
     flowRate: parameters.flowRate,
     gapDistance: parameters.gapDistance,
+  };
+}
+
+const emptyDatasetState: DatasetState = {
+  loaded: false,
+  fileName: null,
+  status: "No dataset loaded",
+  headers: [],
+  rows: [],
+  index: 0,
+  playing: false,
+};
+
+function modeLabel(dataMode: DataMode) {
+  if (dataMode === "live-unity") return "Live Unity";
+  if (dataMode === "dataset") return "Dataset";
+  return "Simulation";
+}
+
+function numericTime(value: number | string, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function applyDatasetSampleState(state: TwinState, index: number, playing: boolean): TwinState {
+  const sample = state.dataset.rows[index];
+  if (!sample) return state;
+
+  const elapsedSeconds = numericTime(sample.t, index);
+  const nextParameters = { ...state.parameters, ...sample.parameters };
+  const calculatedMetrics = calculateDerivedMetrics(nextParameters, elapsedSeconds);
+  const nextMetrics = { ...calculatedMetrics, ...sample.metrics };
+  const progressPercent = ((index + 1) / state.dataset.rows.length) * 100;
+  const machineState: MachineLifecycleState = playing ? "MACHINING" : index >= state.dataset.rows.length - 1 ? "STOPPED" : "PAUSED";
+  const machineStatus: MachineStatus = playing ? "Machining" : "Idle";
+  const unityTelemetry = {
+    ...state.unityTelemetry,
+    ...sample.telemetry,
+    machineState,
+    cyclePercent: progressPercent,
+    progressPercent,
+    elapsedTimeSeconds: elapsedSeconds,
+    machineTimeSeconds: elapsedSeconds,
+    remainingTimeSeconds: Math.max(0, state.dataset.rows.length - index - 1),
+  };
+  const alarms = buildAlarms(nextParameters, nextMetrics);
+  const nextPoint = pointFromState(sample.t, nextParameters, nextMetrics);
+  const previousPoint = state.history[state.history.length - 1];
+  const history =
+    previousPoint && previousPoint.t === nextPoint.t && previousPoint.mrr === nextPoint.mrr
+      ? state.history
+      : [...state.history.slice(-119), nextPoint];
+
+  return {
+    ...state,
+    running: playing,
+    machineStatus,
+    machineState,
+    elapsedSeconds,
+    parameters: nextParameters,
+    pendingParameters: nextParameters,
+    pendingDirty: false,
+    metrics: nextMetrics,
+    validation: validateParameterSet(nextParameters, nextMetrics),
+    alarms,
+    unityTelemetry,
+    dataset: {
+      ...state.dataset,
+      index,
+      playing,
+      status: playing ? "Dataset playback running" : index >= state.dataset.rows.length - 1 ? "Dataset playback complete" : "Dataset playback paused",
+    },
+    history,
   };
 }
 
@@ -174,6 +267,7 @@ export const useTwinStore = create<TwinState>((set) => ({
   connectionStatus: "disconnected",
   machineStatus: "Machining",
   machineState: "READY",
+  cameraView: "isometric",
   unityTelemetry: {
     machineState: "READY",
     cyclePercent: 0,
@@ -204,8 +298,79 @@ export const useTwinStore = create<TwinState>((set) => ({
   eventLog: initialEventLog,
   notifications: [],
   history: Array.from({ length: 48 }, (_, index) => pointFromState(index, initialParameters, calculateDerivedMetrics(initialParameters, index))),
+  dataset: emptyDatasetState,
   setRunning: (running) => set({ running, machineStatus: running ? "Machining" : "Idle", machineState: running ? "MACHINING" : "STOPPED" }),
-  setDataMode: (dataMode) => set((state) => ({ dataMode, eventLog: [buildEvent("INFO", "SYSTEM", `Data mode changed to ${dataMode}.`), ...state.eventLog].slice(0, 100) })),
+  setDataMode: (dataMode) =>
+    set((state) => {
+      if (dataMode === "dataset" && !state.dataset.loaded) {
+        return {
+          notifications: [buildNotification("WARNING", "Upload a CSV dataset to enable Dataset Mode."), ...state.notifications].slice(0, 6),
+          eventLog: [buildEvent("WARNING", "SYSTEM", "Dataset Mode requested without a loaded CSV dataset."), ...state.eventLog].slice(0, 100),
+        };
+      }
+
+      const eventLog = [buildEvent("INFO", "SYSTEM", `Data mode changed to ${modeLabel(dataMode)}.`), ...state.eventLog].slice(0, 100);
+      if (dataMode === "dataset") {
+        return applyDatasetSampleState({ ...state, dataMode, eventLog }, state.dataset.index, state.dataset.playing);
+      }
+
+      return {
+        dataMode,
+        running: dataMode === "simulation" ? state.running : state.running,
+        dataset: { ...state.dataset, playing: false, status: state.dataset.loaded ? "Dataset paused" : state.dataset.status },
+        eventLog,
+      };
+    }),
+  loadDataset: (fileName, headers, rows) =>
+    set((state) => {
+      const dataset: DatasetState = {
+        loaded: true,
+        fileName,
+        headers,
+        rows,
+        index: 0,
+        playing: true,
+        status: `Loaded ${rows.length} rows`,
+      };
+      const eventLog = [buildEvent("INFO", "SYSTEM", `Dataset ${fileName} loaded with ${rows.length} rows.`), ...state.eventLog].slice(0, 100);
+      return applyDatasetSampleState({ ...state, dataMode: "dataset", dataset, eventLog, history: [] }, 0, true);
+    }),
+  clearDataset: () =>
+    set((state) => {
+      const metrics = calculateDerivedMetrics(state.parameters, state.elapsedSeconds);
+      return {
+        dataMode: "simulation",
+        running: true,
+        machineStatus: "Machining",
+        machineState: "MACHINING",
+        dataset: emptyDatasetState,
+        metrics,
+        validation: validateParameterSet(state.parameters, metrics),
+        history: Array.from({ length: 48 }, (_, index) => pointFromState(index, state.parameters, calculateDerivedMetrics(state.parameters, index))),
+        eventLog: [buildEvent("INFO", "SYSTEM", "Dataset cleared. Returned to Simulation Mode."), ...state.eventLog].slice(0, 100),
+        notifications: [buildNotification("INFO", "Dataset Cleared"), ...state.notifications].slice(0, 6),
+      };
+    }),
+  setDatasetPlaying: (playing) =>
+    set((state) => {
+      if (!state.dataset.loaded) return state;
+      if (state.dataMode !== "dataset") return { ...state, dataset: { ...state.dataset, playing: false } };
+      return applyDatasetSampleState(state, state.dataset.index, playing);
+    }),
+  restartDataset: () =>
+    set((state) => {
+      if (!state.dataset.loaded) return state;
+      return applyDatasetSampleState({ ...state, dataMode: "dataset", history: [] }, 0, true);
+    }),
+  advanceDataset: () =>
+    set((state) => {
+      if (state.dataMode !== "dataset" || !state.dataset.loaded || !state.dataset.playing) return state;
+      const nextIndex = state.dataset.index + 1;
+      if (nextIndex >= state.dataset.rows.length) {
+        return applyDatasetSampleState(state, state.dataset.index, false);
+      }
+      return applyDatasetSampleState(state, nextIndex, true);
+    }),
   setConnectionStatus: (connectionStatus) =>
     set((state) => {
       const message = `Dashboard gateway connection ${connectionStatus}.`;
@@ -219,6 +384,7 @@ export const useTwinStore = create<TwinState>((set) => ({
     }),
   setMachineStatus: (machineStatus) => set({ machineStatus, running: machineStatus === "Machining" }),
   setMachineState: (machineState) => set((state) => ({ machineState, unityTelemetry: { ...state.unityTelemetry, machineState } })),
+  setCameraView: (cameraView) => set({ cameraView }),
   updateUnityTelemetry: (telemetry) =>
     set((state) => {
       const unityTelemetry = { ...state.unityTelemetry, ...telemetry };
@@ -231,6 +397,7 @@ export const useTwinStore = create<TwinState>((set) => ({
     }),
   applyLiveTelemetry: ({ telemetry, parameters, metrics }) =>
     set((state) => {
+      if (state.dataMode === "dataset") return state;
       const unityTelemetry = { ...state.unityTelemetry, ...telemetry };
       const nextParameters = parameters ? { ...state.parameters, ...parameters } : state.parameters;
       const calculatedMetrics = parameters ? calculateDerivedMetrics(nextParameters, state.elapsedSeconds) : state.metrics;
@@ -271,7 +438,7 @@ export const useTwinStore = create<TwinState>((set) => ({
     }),
   incrementPendingParameter: (key, delta) =>
     set((state) => {
-      const nextValue = bounded(key, Number(state.pendingParameters[key]) + delta);
+      const nextValue = roundEditable(bounded(key, Number(state.pendingParameters[key]) + delta));
       const pendingParameters = { ...state.pendingParameters, [key]: nextValue };
       const metrics = compareWhatIf(state.parameters, pendingParameters, state.elapsedSeconds).predicted;
       return { pendingParameters, pendingDirty: true, validation: validateParameterSet(pendingParameters, metrics) };
@@ -294,11 +461,18 @@ export const useTwinStore = create<TwinState>((set) => ({
         alarms,
         alarmHistory,
         eventLog,
+        history: [...state.history.slice(-119), pointFromState(state.elapsedSeconds, state.pendingParameters, metrics)],
         notifications: [buildNotification("INFO", "Parameters Applied"), ...state.notifications].slice(0, 6),
       };
     }),
   tick: () =>
     set((state) => {
+      if (state.dataMode === "dataset") {
+        if (!state.dataset.loaded || !state.dataset.playing) return state;
+        const nextIndex = state.dataset.index + 1;
+        if (nextIndex >= state.dataset.rows.length) return applyDatasetSampleState(state, state.dataset.index, false);
+        return applyDatasetSampleState(state, nextIndex, true);
+      }
       if (state.dataMode !== "simulation") return state;
       if (!state.running) return state;
       const elapsedSeconds = state.elapsedSeconds + 1;

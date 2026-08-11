@@ -1,6 +1,12 @@
 node_modules/
 dist/
 work/
+.vs/
+outputs/
+public/unity/
+public/WebGL/*
+!public/WebGL/Build/
+!public/WebGL/Build/**
 *.log
 .env
 .DS_Store

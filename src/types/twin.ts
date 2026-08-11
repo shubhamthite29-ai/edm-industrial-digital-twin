@@ -2,7 +2,7 @@ export type MachineMode = "Die Sinking" | "Wire Cut" | "EDM Drilling";
 export type UserRole = "Operator" | "Production Engineer" | "Maintenance Engineer" | "Research Mode" | "Administrator";
 export type GapState = "Open Circuit" | "Spark" | "Arc" | "Short Circuit";
 export type AlarmLevel = "INFO" | "WARNING" | "CRITICAL";
-export type DataMode = "simulation" | "live-unity";
+export type DataMode = "simulation" | "live-unity" | "dataset";
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
 export type MachineStatus = "Idle" | "Machining";
 export type MachineLifecycleState =
@@ -74,9 +74,12 @@ export interface Alarm {
 }
 
 export interface HistoryPoint extends DerivedMetrics {
-  t: number;
+  t: number | string;
   voltage: number;
   current: number;
+  gapVoltage: number;
+  pulseOn: number;
+  pulseOff: number;
   pressure: number;
   flowRate: number;
   gapDistance: number;
@@ -119,4 +122,22 @@ export interface DashboardNotification {
   timestamp: string;
   level: EventLogLevel;
   message: string;
+}
+
+export interface DatasetSample {
+  t: number | string;
+  parameters: Partial<Pick<MachineParameters, "voltage" | "current" | "gapVoltage" | "pulseOn" | "pulseOff" | "gapDistance" | "servoFeed" | "toolDiameter" | "pressure" | "flowRate" | "conductivity" | "openCircuitVoltage" | "depthOfCut">>;
+  metrics: Partial<Pick<DerivedMetrics, "dutyCycle" | "mrr" | "toolWearRate" | "surfaceRoughness" | "machineHealth" | "gapStability" | "dielectricTemperature">>;
+  telemetry: Partial<Pick<UnityTelemetry, "toolPosition">>;
+  original: Record<string, string | number>;
+}
+
+export interface DatasetState {
+  loaded: boolean;
+  fileName: string | null;
+  status: string;
+  headers: string[];
+  rows: DatasetSample[];
+  index: number;
+  playing: boolean;
 }

@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { MachineParameters } from "../types/twin";
 import { useTwinStore } from "../store/useTwinStore";
 
@@ -12,11 +13,78 @@ interface ParameterStepperProps {
   decimals?: number;
 }
 
-export function ParameterStepper({ id, label, unit, min, max, step, decimals = 1 }: ParameterStepperProps) {
+const editableDecimalPattern = /^-?(?:\d+(?:\.\d*)?|\.\d*)?$/;
+
+function isPartialDecimal(value: string) {
+  return value === "" || value === "-" || value === "." || value === "-.";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundToDecimals(value: number, decimals: number) {
+  return Number(value.toFixed(decimals));
+}
+
+function formatNumber(value: number, decimals: number) {
+  if (!Number.isFinite(value)) return "";
+  const rounded = value.toFixed(decimals);
+  return rounded.replace(/\.?0+$/, "");
+}
+
+export function ParameterStepper({ id, label, unit, min, max, step, decimals = 2 }: ParameterStepperProps) {
+  const displayDecimals = Math.max(0, decimals);
   const value = useTwinStore((state) => state.pendingParameters[id]);
   const updatePendingParameter = useTwinStore((state) => state.updatePendingParameter);
-  const incrementPendingParameter = useTwinStore((state) => state.incrementPendingParameter);
   const numericValue = Number(value);
+  const [draft, setDraft] = useState(() => formatNumber(numericValue, displayDecimals));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(formatNumber(numericValue, displayDecimals));
+  }, [displayDecimals, focused, numericValue]);
+
+  const updateFromDraft = (nextDraft: string) => {
+    const normalized = nextDraft.replace(",", ".");
+    if (!editableDecimalPattern.test(normalized)) return;
+
+    setDraft(normalized);
+    if (isPartialDecimal(normalized)) return;
+
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) {
+      updatePendingParameter(id, parsed as MachineParameters[typeof id]);
+    }
+  };
+
+  const applyValue = (nextValue: number) => {
+    const boundedValue = roundToDecimals(clamp(nextValue, min, max), displayDecimals);
+    updatePendingParameter(id, boundedValue as MachineParameters[typeof id]);
+    setDraft(formatNumber(boundedValue, displayDecimals));
+  };
+
+  const stepValue = (delta: number) => {
+    const parsedDraft = Number(draft);
+    const baseValue = Number.isFinite(parsedDraft) && !isPartialDecimal(draft) ? parsedDraft : numericValue;
+    applyValue(baseValue + delta);
+  };
+
+  const commitDraft = () => {
+    setFocused(false);
+    if (isPartialDecimal(draft)) {
+      setDraft(formatNumber(numericValue, displayDecimals));
+      return;
+    }
+
+    const parsed = Number(draft);
+    if (!Number.isFinite(parsed)) {
+      setDraft(formatNumber(numericValue, displayDecimals));
+      return;
+    }
+
+    applyValue(parsed);
+  };
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_124px] items-center gap-3 rounded border border-plant-line bg-plant-deck p-3">
@@ -30,24 +98,24 @@ export function ParameterStepper({ id, label, unit, min, max, step, decimals = 1
         <button
           type="button"
           className="flex h-10 items-center justify-center text-plant-cyan hover:bg-plant-cyan/10"
-          onClick={() => incrementPendingParameter(id, -step)}
+          onClick={() => stepValue(-step)}
           aria-label={`Decrease ${label}`}
         >
           <ChevronDown size={16} />
         </button>
         <input
           className="h-10 min-w-0 border-x border-plant-line bg-transparent px-1 text-center font-mono text-sm text-plant-text outline-none"
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={Number(numericValue.toFixed(decimals))}
-          onChange={(event) => updatePendingParameter(id, Number(event.target.value) as MachineParameters[typeof id])}
+          type="text"
+          inputMode="decimal"
+          value={draft}
+          onBlur={commitDraft}
+          onChange={(event) => updateFromDraft(event.target.value)}
+          onFocus={() => setFocused(true)}
         />
         <button
           type="button"
           className="flex h-10 items-center justify-center text-plant-cyan hover:bg-plant-cyan/10"
-          onClick={() => incrementPendingParameter(id, step)}
+          onClick={() => stepValue(step)}
           aria-label={`Increase ${label}`}
         >
           <ChevronUp size={16} />

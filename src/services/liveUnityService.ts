@@ -43,6 +43,8 @@ function handleMessage(message: GatewayMessage) {
   if (message.type !== "unity.state") return;
 
   const state = useTwinStore.getState();
+  if (state.dataMode === "dataset") return;
+
   const status = normalizeUnityStatus(message.payload?.status);
 
   const machineState = normalizeMachineState(message.payload?.machineState ?? message.payload?.state);
@@ -65,12 +67,39 @@ function handleMessage(message: GatewayMessage) {
   const gapVoltageV = numberFromPayload(message.payload?.gapVoltageV);
   const pulseOnUs = numberFromPayload(message.payload?.pulseOnUs);
   const pulseOffUs = numberFromPayload(message.payload?.pulseOffUs);
+  const gapDistanceMm = numberFromPayload(message.payload?.gapDistanceMm);
+  const servoFeedPercent = numberFromPayload(message.payload?.servoFeedPercent);
+  const flushingPressureBar = numberFromPayload(message.payload?.flushingPressureBar);
+  const flowRateLpm = numberFromPayload(message.payload?.flowRateLpm);
+  const conductivityUsCm = numberFromPayload(message.payload?.conductivityUsCm);
+  const openCircuitVoltageV = numberFromPayload(message.payload?.openCircuitVoltageV);
+  const toolDiameterMm = numberFromPayload(message.payload?.toolDiameterMm);
+  const depthOfCutMm = numberFromPayload(message.payload?.depthOfCutMm);
+  const hasCompleteParameterEcho =
+    gapDistanceMm !== undefined ||
+    servoFeedPercent !== undefined ||
+    flushingPressureBar !== undefined ||
+    flowRateLpm !== undefined ||
+    conductivityUsCm !== undefined ||
+    openCircuitVoltageV !== undefined ||
+    toolDiameterMm !== undefined ||
+    depthOfCutMm !== undefined;
 
-  if (currentA !== undefined) parameters.current = currentA;
-  if (voltageV !== undefined) parameters.voltage = voltageV;
-  if (gapVoltageV !== undefined) parameters.gapVoltage = gapVoltageV;
-  if (pulseOnUs !== undefined) parameters.pulseOn = pulseOnUs;
-  if (pulseOffUs !== undefined) parameters.pulseOff = pulseOffUs;
+  if (hasCompleteParameterEcho) {
+    if (currentA !== undefined) parameters.current = currentA;
+    if (voltageV !== undefined) parameters.voltage = voltageV;
+    if (gapVoltageV !== undefined) parameters.gapVoltage = gapVoltageV;
+    if (pulseOnUs !== undefined) parameters.pulseOn = pulseOnUs;
+    if (pulseOffUs !== undefined) parameters.pulseOff = pulseOffUs;
+    if (gapDistanceMm !== undefined) parameters.gapDistance = gapDistanceMm;
+    if (servoFeedPercent !== undefined) parameters.servoFeed = servoFeedPercent;
+    if (flushingPressureBar !== undefined) parameters.pressure = flushingPressureBar;
+    if (flowRateLpm !== undefined) parameters.flowRate = flowRateLpm;
+    if (conductivityUsCm !== undefined) parameters.conductivity = conductivityUsCm;
+    if (openCircuitVoltageV !== undefined) parameters.openCircuitVoltage = openCircuitVoltageV;
+    if (toolDiameterMm !== undefined) parameters.toolDiameter = toolDiameterMm;
+    if (depthOfCutMm !== undefined) parameters.depthOfCut = depthOfCutMm;
+  }
 
   const temperatureC = numberFromPayload(message.payload?.temperatureC);
   const mrr = numberFromPayload(message.payload?.mrr);
@@ -195,5 +224,6 @@ export function pingGateway() {
 }
 
 export function setLiveCameraView(view: CameraView) {
+  useTwinStore.getState().setCameraView(view);
   return cameraCommandService.setView(view);
 }

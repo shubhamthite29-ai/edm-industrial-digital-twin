@@ -1,11 +1,12 @@
 # EDM Industrial Digital Twin Platform v1.0
 
-Production-ready React + Three.js + Unity + Node WebSocket platform for an EDM industrial digital twin. The React dashboard is the master HMI, the Node gateway routes JSON messages, and Unity runs the live digital twin visualization.
+Production-ready React + Unity WebGL + Node WebSocket platform for an EDM industrial digital twin. The React dashboard is the master HMI, the Node gateway routes JSON messages, and Unity remains the live rendering engine for the machine visualization.
 
 ## Version 1.0 Capabilities
 
 - React dashboard controls Unity through `ws://localhost:8080`
 - Unity publishes live telemetry back to the dashboard
+- Unity WebGL is embedded directly as a React-managed canvas, without an iframe
 - Continuous machining until Stop or Emergency Stop
 - Start, Stop, Pause, Resume, Home, Reset, and Emergency Stop commands
 - Current, Voltage, Gap Voltage, Pulse ON, and Pulse OFF synchronization
@@ -65,14 +66,14 @@ The repository includes a GitHub Actions workflow at `.github/workflows/deploy-p
 - `src/app/App.tsx` - dashboard application shell and pages
 - `src/Realtime/RealtimeClient.ts` - browser WebSocket client with reconnect, heartbeat, latency, and logs
 - `src/Machine/` - machine command, camera, and parameter services
-- `src/components/MachineScene.tsx` - Three.js EDM CAD model visualization
+- `src/components/UnityWebGLViewer.tsx` - direct Unity WebGL canvas integration
 - `src/data/sensors.ts` - sensor catalog and telemetry metadata
 - `src/services/edmCalculations.ts` - EDM physics and digital twin calculations
 - `src/store/useTwinStore.ts` - live machine state store
 - `gateway/` - Node.js WebSocket gateway
 - `unity/Assets/Scripts/` - Unity networking, machine state, telemetry, dashboard, and camera scripts
 - `server/static-server.mjs` - optional Node static production server
-- `public/models/edm-unity.fbx` - EDM machine CAD model asset
+- `public/WebGL/` - Unity WebGL dashboard build
 
 ## Unity Setup
 

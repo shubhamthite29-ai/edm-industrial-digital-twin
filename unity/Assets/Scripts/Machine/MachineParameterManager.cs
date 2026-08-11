@@ -41,7 +41,7 @@ namespace EDMDigitalTwin.Machine
             machineParameters.ApplyPatch(patch);
             OnParametersChanged?.Invoke(machineParameters);
             MachineEvents.RaiseParameterChanged(machineParameters);
-            Debug.Log($"Machine parameters updated: I={machineParameters.currentA}A V={machineParameters.voltageV}V Gap={machineParameters.gapVoltageV}V Ton={machineParameters.pulseOnUs}us Toff={machineParameters.pulseOffUs}us");
+            Debug.Log($"Machine parameters updated: I={machineParameters.currentA}A V={machineParameters.voltageV}V GapV={machineParameters.gapVoltageV}V Gap={machineParameters.gapDistanceMm}mm Ton={machineParameters.pulseOnUs}us Toff={machineParameters.pulseOffUs}us");
         }
 
         private static MachineParametersPatch ParsePatch(string json)
@@ -75,11 +75,23 @@ namespace EDMDigitalTwin.Machine
                     case "pulseOffUs":
                         patch.pulseOffUs = value;
                         break;
+                    case "gapDistanceMm":
+                        patch.gapDistanceMm = value;
+                        break;
                     case "servoFeedPercent":
                         patch.servoFeedPercent = value;
                         break;
                     case "flushingPressureBar":
                         patch.flushingPressureBar = value;
+                        break;
+                    case "flowRateLpm":
+                        patch.flowRateLpm = value;
+                        break;
+                    case "conductivityUsCm":
+                        patch.conductivityUsCm = value;
+                        break;
+                    case "openCircuitVoltageV":
+                        patch.openCircuitVoltageV = value;
                         break;
                     case "toolDiameterMm":
                         patch.toolDiameterMm = value;

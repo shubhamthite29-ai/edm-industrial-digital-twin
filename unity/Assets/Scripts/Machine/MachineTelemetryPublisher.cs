@@ -29,6 +29,7 @@ namespace EDMDigitalTwin.Machine
         private float runtimeToolPosition;
         private float runtimeTankPosition;
         private bool hasRuntimePositions;
+        private MachineParameters latestParameters;
 
         public MachineState CurrentState => machineState;
         public float CyclePercent => cyclePercent;
@@ -159,7 +160,11 @@ namespace EDMDigitalTwin.Machine
             }
         }
 
-        private void HandleParameterChanged(MachineParameters parameters) => PublishNow();
+        private void HandleParameterChanged(MachineParameters parameters)
+        {
+            latestParameters = parameters;
+            PublishNow();
+        }
 
         private void HandleStateChanged(MachineState state)
         {
@@ -196,7 +201,7 @@ namespace EDMDigitalTwin.Machine
 
         private string BuildTelemetryJson()
         {
-            MachineParameters parameters = parameterManager != null ? parameterManager.Current : new MachineParameters();
+            MachineParameters parameters = latestParameters ?? (parameterManager != null ? parameterManager.Current : new MachineParameters());
             string status = machineState == MachineState.MACHINING ? "machining" : "idle";
             string now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
 
@@ -225,6 +230,22 @@ namespace EDMDigitalTwin.Machine
             AppendNumber(builder, "pulseOnUs", parameters.pulseOnUs);
             builder.Append(",");
             AppendNumber(builder, "pulseOffUs", parameters.pulseOffUs);
+            builder.Append(",");
+            AppendNumber(builder, "gapDistanceMm", parameters.gapDistanceMm);
+            builder.Append(",");
+            AppendNumber(builder, "servoFeedPercent", parameters.servoFeedPercent);
+            builder.Append(",");
+            AppendNumber(builder, "flushingPressureBar", parameters.flushingPressureBar);
+            builder.Append(",");
+            AppendNumber(builder, "flowRateLpm", parameters.flowRateLpm);
+            builder.Append(",");
+            AppendNumber(builder, "conductivityUsCm", parameters.conductivityUsCm);
+            builder.Append(",");
+            AppendNumber(builder, "openCircuitVoltageV", parameters.openCircuitVoltageV);
+            builder.Append(",");
+            AppendNumber(builder, "toolDiameterMm", parameters.toolDiameterMm);
+            builder.Append(",");
+            AppendNumber(builder, "depthOfCutMm", parameters.depthOfCutMm);
             builder.Append(",");
             AppendNumber(builder, "temperatureC", parameters.temperatureC);
             builder.Append(",");

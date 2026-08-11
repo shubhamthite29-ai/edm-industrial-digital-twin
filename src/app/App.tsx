@@ -34,15 +34,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { MachineScene } from "../components/MachineScene";
 import { MetricCard } from "../components/MetricCard";
 import { Panel } from "../components/Panel";
 import { ParameterStepper } from "../components/ParameterStepper";
 import { SensorDiagram } from "../components/SensorDiagram";
 import { StatusPill } from "../components/StatusPill";
+import { UnityWebGLViewer } from "../components/UnityWebGLViewer";
 import { sensors, sensorGroups } from "../data/sensors";
 import { useInterval } from "../hooks/useInterval";
 import { compareWhatIf } from "../services/edmCalculations";
+import { parseCsvDataset } from "../services/csvDatasetService";
+import { analyzeDatasetOptimization, optimizationObjectives, type OptimizationObjective, type RankedExperimentalCondition } from "../services/edmOptimizationService";
 import {
   emergencyStopLiveMachine,
   homeLiveMachine,
@@ -86,6 +88,10 @@ function fmt(value: number, digits = 1) {
   return Number.isFinite(value) ? value.toFixed(digits) : "--";
 }
 
+function fmtMaybe(value: unknown, digits = 2) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits).replace(/\.?0+$/, "") : "--";
+}
+
 function currentModule(pathname: string) {
   const key = pathname.replace("/", "") || "dashboard";
   return modules.some((item) => item.key === key) ? key : "dashboard";
@@ -121,11 +127,19 @@ function ShellHeader() {
   const setRole = useTwinStore((state) => state.setRole);
   const metrics = useTwinStore((state) => state.metrics);
   const alarms = useTwinStore((state) => state.alarms);
+  const dataset = useTwinStore((state) => state.dataset);
+  const setDatasetPlaying = useTwinStore((state) => state.setDatasetPlaying);
   const liveModeDisconnected = dataMode === "live-unity" && connectionStatus !== "connected";
+  const runActive = dataMode === "dataset" ? dataset.playing : running;
 
   const handleRunToggle = () => {
     if (dataMode === "simulation") {
       setRunning(!running);
+      return;
+    }
+
+    if (dataMode === "dataset") {
+      setDatasetPlaying(!dataset.playing);
       return;
     }
 
@@ -153,6 +167,7 @@ function ShellHeader() {
           {[
             ["simulation", "Simulation Mode"],
             ["live-unity", "Live Unity Mode"],
+            ["dataset", "Dataset Mode"],
           ].map(([mode, label]) => (
             <button
               key={mode}
@@ -178,14 +193,14 @@ function ShellHeader() {
         </select>
         <button
           className={`inline-flex h-9 items-center gap-2 rounded px-3 text-xs font-semibold uppercase tracking-wide ${
-            running ? "bg-plant-red text-white" : "bg-plant-green text-plant-void"
+            runActive ? "bg-plant-red text-white" : "bg-plant-green text-plant-void"
           }`}
           disabled={liveModeDisconnected}
           onClick={handleRunToggle}
           type="button"
         >
-          {running ? <Pause size={15} /> : <Play size={15} />}
-          {running ? "Halt" : "Start"}
+          {runActive ? <Pause size={15} /> : <Play size={15} />}
+          {runActive ? "Halt" : "Start"}
         </button>
       </div>
     </header>
@@ -194,7 +209,7 @@ function ShellHeader() {
 
 function Sidebar({ active }: { active: string }) {
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-plant-line bg-plant-deck lg:block">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-plant-line bg-plant-deck lg:block">
       <div className="border-b border-plant-line px-4 py-4">
         <div className="text-[10px] uppercase tracking-[0.24em] text-plant-muted">Aerospace EDM Cell</div>
         <div className="mt-1 font-mono text-sm text-plant-text">CELL-EDM-04 / OPC-UA</div>
@@ -264,11 +279,14 @@ function TrendChart({ dataKey, color, title, unit }: { dataKey: string; color: s
 }
 
 function MachineView() {
-  const parameters = useTwinStore((state) => state.parameters);
   const metrics = useTwinStore((state) => state.metrics);
+  const telemetry = useTwinStore((state) => state.unityTelemetry);
+  const machineState = useTwinStore((state) => state.machineState);
+  const cameraView = useTwinStore((state) => state.cameraView);
+  const connectionStatus = useTwinStore((state) => state.connectionStatus);
   return (
-    <Panel title="3D EDM Digital Twin" eyebrow="Synchronized machine model" accent="violet">
-      <MachineScene metrics={metrics} parameters={parameters} />
+    <Panel title="3D EDM Digital Twin" eyebrow="Direct Unity WebGL renderer" accent="violet">
+      <UnityWebGLViewer connectionStatus={connectionStatus} telemetry={telemetry} machineState={machineState} cameraView={cameraView} />
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <StatusPill label={`Spark ${metrics.gapState}`} tone={metrics.gapState === "Spark" ? "green" : metrics.gapState === "Arc" ? "red" : "amber"} />
         <StatusPill label={`${fmt(metrics.dielectricTemperature, 1)} degC dielectric`} tone={metrics.dielectricTemperature > 30 ? "amber" : "cyan"} />
@@ -278,12 +296,251 @@ function MachineView() {
   );
 }
 
+function DatasetPanel() {
+  const dataset = useTwinStore((state) => state.dataset);
+  const dataMode = useTwinStore((state) => state.dataMode);
+  const setDataMode = useTwinStore((state) => state.setDataMode);
+  const loadDataset = useTwinStore((state) => state.loadDataset);
+  const clearDataset = useTwinStore((state) => state.clearDataset);
+  const setDatasetPlaying = useTwinStore((state) => state.setDatasetPlaying);
+  const restartDataset = useTwinStore((state) => state.restartDataset);
+  const pushNotification = useTwinStore((state) => state.pushNotification);
+  const [uploadStatus, setUploadStatus] = useState("Upload a CSV dataset to enable Dataset Mode.");
+
+  const handleUpload = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const parsed = parseCsvDataset(await file.text(), file.name);
+      loadDataset(parsed.fileName, parsed.headers, parsed.rows);
+      setUploadStatus(`Loaded ${parsed.rows.length} rows from ${file.name}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to parse CSV dataset.";
+      setUploadStatus(message);
+      pushNotification("WARNING", message);
+    }
+  };
+
+  return (
+    <Panel title="Dataset / Data Source" eyebrow="Authoritative operating mode" accent="cyan">
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <div className="space-y-3">
+          <div className="inline-flex overflow-hidden rounded border border-plant-line bg-plant-void">
+            {([
+              ["simulation", "Simulation"],
+              ["live-unity", "Live Unity"],
+              ["dataset", "Dataset"],
+            ] as Array<[DataMode, string]>).map(([mode, label]) => (
+              <button
+                key={mode}
+                className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                  dataMode === mode ? "bg-plant-cyan text-plant-void" : "text-plant-muted hover:text-plant-text"
+                }`}
+                onClick={() => setDataMode(mode)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <Spec label="Data Source" value={dataMode === "dataset" ? "DATASET MODE" : dataMode === "live-unity" ? "LIVE UNITY MODE" : "SIMULATION MODE"} />
+            <Spec label="File" value={dataset.fileName ?? "No CSV loaded"} />
+            <Spec label="Rows" value={dataset.loaded ? dataset.rows.length.toLocaleString() : "0"} />
+            <Spec label="Current Sample" value={dataset.loaded ? `${dataset.index + 1} / ${dataset.rows.length}` : "0 / 0"} />
+          </div>
+          <div className="text-xs leading-5 text-plant-muted">{dataset.loaded ? dataset.status : uploadStatus}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <label className="inline-flex cursor-pointer items-center justify-center rounded bg-plant-cyan px-4 py-2 text-xs font-semibold uppercase tracking-wide text-plant-void">
+            Upload CSV
+            <input className="hidden" type="file" accept=".csv,text/csv" onChange={(event) => handleUpload(event.target.files?.[0] ?? null)} />
+          </label>
+          <button className="rounded border border-plant-line px-3 py-2 text-xs font-semibold uppercase text-plant-text disabled:cursor-not-allowed disabled:opacity-40" disabled={!dataset.loaded} onClick={() => setDatasetPlaying(!dataset.playing)} type="button">
+            {dataset.playing ? "Pause" : "Play"}
+          </button>
+          <button className="rounded border border-plant-line px-3 py-2 text-xs font-semibold uppercase text-plant-text disabled:cursor-not-allowed disabled:opacity-40" disabled={!dataset.loaded} onClick={restartDataset} type="button">
+            Restart
+          </button>
+          <button className="rounded border border-plant-red px-3 py-2 text-xs font-semibold uppercase text-plant-red disabled:cursor-not-allowed disabled:opacity-40" disabled={!dataset.loaded} onClick={clearDataset} type="button">
+            Clear Dataset
+          </button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function sampleLabel(condition: RankedExperimentalCondition | null) {
+  if (!condition) return "--";
+  const sampleId = condition.sample.t !== "" && condition.sample.t != null ? condition.sample.t : condition.rowIndex + 1;
+  return `Sample ${sampleId}`;
+}
+
+function fieldAvailable(rows: RankedExperimentalCondition[], read: (condition: RankedExperimentalCondition) => unknown) {
+  return rows.some((condition) => typeof read(condition) === "number" && Number.isFinite(read(condition) as number));
+}
+
+function ParameterChip({ label, value, unit = "" }: { label: string; value: unknown; unit?: string }) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return (
+    <div className="rounded border border-plant-line bg-plant-void p-3">
+      <div className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">{label}</div>
+      <div className="mt-1 font-mono text-sm text-plant-text">
+        {fmtMaybe(value)}
+        {unit ? <span className="ml-1 text-plant-muted">{unit}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function OptimizationEngine() {
+  const dataset = useTwinStore((state) => state.dataset);
+  const [objective, setObjective] = useState<OptimizationObjective>("balanced");
+  const result = useMemo(() => analyzeDatasetOptimization(dataset.rows, objective), [dataset.rows, objective]);
+  const topRows = result.rankedSamples.slice(0, 5);
+  const best = result.bestCondition;
+  const objectiveLabel = optimizationObjectives.find((item) => item.id === objective)?.label ?? "Balanced Performance";
+
+  useEffect(() => {
+    if (!dataset.loaded) setObjective("balanced");
+  }, [dataset.loaded]);
+
+  const columns = [
+    { key: "rank", label: "Rank", show: true, render: (_condition: RankedExperimentalCondition, index: number) => `#${index + 1}` },
+    { key: "sample", label: "Sample", show: true, render: (condition: RankedExperimentalCondition) => String(condition.sample.t !== "" && condition.sample.t != null ? condition.sample.t : condition.rowIndex + 1) },
+    { key: "current", label: "Current", show: fieldAvailable(topRows, (condition) => condition.sample.parameters.current), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.parameters.current) },
+    { key: "voltage", label: "Voltage", show: fieldAvailable(topRows, (condition) => condition.sample.parameters.voltage), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.parameters.voltage) },
+    { key: "pulseOn", label: "Ton", show: fieldAvailable(topRows, (condition) => condition.sample.parameters.pulseOn), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.parameters.pulseOn) },
+    { key: "pulseOff", label: "Toff", show: fieldAvailable(topRows, (condition) => condition.sample.parameters.pulseOff), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.parameters.pulseOff) },
+    { key: "mrr", label: "MRR", show: fieldAvailable(topRows, (condition) => condition.sample.metrics.mrr), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.metrics.mrr) },
+    { key: "twr", label: "TWR", show: fieldAvailable(topRows, (condition) => condition.sample.metrics.toolWearRate), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.metrics.toolWearRate) },
+    { key: "ra", label: "Ra", show: fieldAvailable(topRows, (condition) => condition.sample.metrics.surfaceRoughness), render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.sample.metrics.surfaceRoughness) },
+    { key: "score", label: "Score", show: true, render: (condition: RankedExperimentalCondition) => fmtMaybe(condition.score, 1) },
+  ].filter((column) => column.show);
+
+  return (
+    <Panel title="EDM Parameter Optimization Engine" eyebrow="Multi-objective experimental performance analysis" accent="violet">
+      {!dataset.loaded ? (
+        <div className="rounded border border-dashed border-plant-line bg-plant-void p-5">
+          <div className="text-sm font-semibold uppercase tracking-wide text-plant-muted">Status: Waiting For Dataset</div>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-plant-text">
+            Upload an experimental dataset to identify optimal observed machining conditions.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {optimizationObjectives.map((item) => {
+              const disabled =
+                (item.id === "max-mrr" && !result.availableMetrics.mrr) ||
+                (item.id === "min-twr" && !result.availableMetrics.twr) ||
+                (item.id === "best-surface" && !result.availableMetrics.surfaceRoughness);
+              return (
+                <button
+                  key={item.id}
+                  className={`rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    objective === item.id ? "border-plant-violet bg-plant-violet/15 text-plant-violet" : "border-plant-line text-plant-muted hover:text-plant-text"
+                  } disabled:cursor-not-allowed disabled:opacity-40`}
+                  disabled={disabled}
+                  onClick={() => setObjective(item.id)}
+                  type="button"
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {!best ? (
+            <div className="rounded border border-plant-amber/60 bg-plant-amber/10 p-4 text-sm text-plant-amber">{result.message}</div>
+          ) : (
+            <>
+              <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded border border-plant-line bg-plant-deck p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">Optimal Observed Condition</div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusPill label={sampleLabel(best)} tone="violet" />
+                    <StatusPill label={`Score ${fmtMaybe(best.score, 1)} / 100`} tone="green" />
+                    <StatusPill label={`Objective ${objectiveLabel}`} tone="cyan" />
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <ParameterChip label="Current" value={best.sample.parameters.current} unit="A" />
+                    <ParameterChip label="Voltage" value={best.sample.parameters.voltage} unit="V" />
+                    <ParameterChip label="Gap Voltage" value={best.sample.parameters.gapVoltage} unit="V" />
+                    <ParameterChip label="Pulse ON" value={best.sample.parameters.pulseOn} unit="us" />
+                    <ParameterChip label="Pulse OFF" value={best.sample.parameters.pulseOff} unit="us" />
+                    <ParameterChip label="Duty Cycle" value={best.sample.metrics.dutyCycle} unit="%" />
+                    <ParameterChip label="Gap Distance" value={best.sample.parameters.gapDistance} unit="mm" />
+                    <ParameterChip label="Servo Feed" value={best.sample.parameters.servoFeed} />
+                    <ParameterChip label="Tool Diameter" value={best.sample.parameters.toolDiameter} unit="mm" />
+                    <ParameterChip label="Pressure" value={best.sample.parameters.pressure} unit="bar" />
+                    <ParameterChip label="Flow" value={best.sample.parameters.flowRate} unit="L/min" />
+                    <ParameterChip label="Conductivity" value={best.sample.parameters.conductivity} unit="uS/cm" />
+                    <ParameterChip label="Open Circuit Voltage" value={best.sample.parameters.openCircuitVoltage} unit="V" />
+                    <ParameterChip label="Depth of Cut" value={best.sample.parameters.depthOfCut} unit="mm" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded border border-plant-line bg-plant-deck p-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">Resulting Performance</div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <ParameterChip label="MRR" value={best.sample.metrics.mrr} unit="mm3/min" />
+                      <ParameterChip label="TWR" value={best.sample.metrics.toolWearRate} />
+                      <ParameterChip label="Surface Roughness" value={best.sample.metrics.surfaceRoughness} unit="um" />
+                      <ParameterChip label="Machine Health" value={best.sample.metrics.machineHealth} unit="%" />
+                      <ParameterChip label="Gap Stability" value={best.sample.metrics.gapStability} unit="%" />
+                      <ParameterChip label="Temperature" value={best.sample.metrics.dielectricTemperature} unit="degC" />
+                    </div>
+                  </div>
+                  <SpecBlock title="Why This Condition?" value={result.explanation} tone="cyan" />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Spec label="Basis" value="Optimal Observed Condition" />
+                    <Spec label="Dataset" value={dataset.fileName ?? "Uploaded dataset"} />
+                    <Spec label="Valid Samples" value={`${result.validSampleCount} / ${dataset.rows.length}`} />
+                    <Spec label="Excluded Samples" value={`${result.excludedSampleCount}`} />
+                  </div>
+                  <div className="text-xs leading-5 text-plant-muted">{result.message}</div>
+                </div>
+              </div>
+
+              <div className="rounded border border-plant-line bg-plant-deck p-4">
+                <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-plant-text">Top Experimental Conditions</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] border-collapse text-sm">
+                    <thead className="bg-plant-void text-left text-[10px] uppercase tracking-wide text-plant-muted">
+                      <tr>
+                        {columns.map((column) => (
+                          <th key={column.key} className="border border-plant-line p-2">{column.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topRows.map((condition, index) => (
+                        <tr key={`${condition.rowIndex}-${condition.score}`} className="font-mono text-plant-text">
+                          {columns.map((column) => (
+                            <td key={column.key} className="border border-plant-line p-2">{column.render(condition, index)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
 function LiveCommandPanel() {
   const dataMode = useTwinStore((state) => state.dataMode);
   const connectionStatus = useTwinStore((state) => state.connectionStatus);
   const machineState = useTwinStore((state) => state.machineState);
   const telemetry = useTwinStore((state) => state.unityTelemetry);
-  const disabled = dataMode !== "live-unity" || connectionStatus !== "connected";
+  const cameraView = useTwinStore((state) => state.cameraView);
+  const commandDisabled = dataMode !== "live-unity" || connectionStatus !== "connected";
 
   const commands = [
     ["Start", startLiveMachining, "green"],
@@ -319,7 +576,7 @@ function LiveCommandPanel() {
                       ? "border-plant-amber bg-plant-amber/15 text-plant-amber"
                       : "border-plant-cyan bg-plant-cyan/15 text-plant-cyan"
               } disabled:cursor-not-allowed disabled:opacity-40`}
-              disabled={disabled}
+              disabled={commandDisabled}
               onClick={() => command()}
               type="button"
             >
@@ -330,8 +587,9 @@ function LiveCommandPanel() {
           {cameraViews.map(([label, view]) => (
             <button
               key={view}
-              className="rounded border border-plant-line px-3 py-2 text-xs font-semibold uppercase tracking-wide text-plant-muted transition hover:text-plant-text disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={disabled}
+              className={`rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                cameraView === view ? "border-plant-cyan bg-plant-cyan/15 text-plant-cyan" : "border-plant-line text-plant-muted hover:text-plant-text"
+              }`}
               onClick={() => setLiveCameraView(view)}
               type="button"
             >
@@ -381,18 +639,18 @@ function MachineControl() {
       }
     >
       <div className="grid gap-3 xl:grid-cols-2">
-        <ParameterStepper id="voltage" label="Voltage" unit="V" min={40} max={160} step={1} decimals={0} />
+        <ParameterStepper id="voltage" label="Voltage" unit="V" min={40} max={160} step={0.5} decimals={2} />
         <ParameterStepper id="current" label="Current" unit="A" min={2} max={35} step={0.5} />
-        <ParameterStepper id="gapVoltage" label="Gap Voltage" unit="V" min={20} max={140} step={1} decimals={0} />
-        <ParameterStepper id="pulseOn" label="Pulse ON" unit="us" min={20} max={300} step={5} decimals={0} />
-        <ParameterStepper id="pulseOff" label="Pulse OFF" unit="us" min={10} max={180} step={5} decimals={0} />
-        <ParameterStepper id="gapDistance" label="Gap Distance" unit="mm" min={0.02} max={0.18} step={0.005} decimals={3} />
+        <ParameterStepper id="gapVoltage" label="Gap Voltage" unit="V" min={20} max={140} step={0.5} decimals={2} />
+        <ParameterStepper id="pulseOn" label="Pulse ON" unit="us" min={20} max={300} step={0.25} decimals={2} />
+        <ParameterStepper id="pulseOff" label="Pulse OFF" unit="us" min={10} max={180} step={0.25} decimals={2} />
+        <ParameterStepper id="gapDistance" label="Gap Distance" unit="mm" min={0.02} max={0.5} step={0.005} decimals={3} />
         <ParameterStepper id="servoFeed" label="Servo Feed" unit="mm/min" min={0.02} max={1.2} step={0.02} decimals={2} />
         <ParameterStepper id="toolDiameter" label="Tool Diameter" unit="mm" min={0.2} max={40} step={0.1} />
         <ParameterStepper id="pressure" label="Pressure" unit="bar" min={0.5} max={8} step={0.1} />
         <ParameterStepper id="flowRate" label="Flow" unit="L/min" min={1} max={20} step={0.2} />
         <ParameterStepper id="conductivity" label="Conductivity" unit="uS/cm" min={0.5} max={18} step={0.5} />
-        <ParameterStepper id="openCircuitVoltage" label="Open Circuit Voltage" unit="V" min={70} max={140} step={1} decimals={0} />
+        <ParameterStepper id="openCircuitVoltage" label="Open Circuit Voltage" unit="V" min={70} max={140} step={0.5} decimals={2} />
         <ParameterStepper id="depthOfCut" label="Depth of Cut" unit="mm" min={0.5} max={80} step={0.5} />
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -542,33 +800,43 @@ function SpecBlock({ title, value, tone }: { title: string; value: string; tone:
 function AICopilot() {
   const metrics = useTwinStore((state) => state.metrics);
   const parameters = useTwinStore((state) => state.parameters);
+  const history = useTwinStore((state) => state.history);
+  const dataMode = useTwinStore((state) => state.dataMode);
+  const dataset = useTwinStore((state) => state.dataset);
+  const previous = history.length > 1 ? history[history.length - 2] : null;
+  const sourceLabel = dataMode === "dataset" ? "Dataset" : dataMode === "live-unity" ? "Live Unity" : "Simulation";
+  const mrrDelta = previous ? metrics.mrr - previous.mrr : 0;
   const recommendations = [
-    metrics.surfaceRoughness > 2.8
-      ? "Reduce pulse ON by 10-15 us and increase pulse OFF by 10 us to lower crater energy and improve Ra."
-      : "Surface finish is inside the current qualified band; prioritize MRR or tool life depending on production target.",
+    dataMode === "dataset" && dataset.loaded
+      ? `Dataset sample ${dataset.index + 1}/${dataset.rows.length}: MRR is ${fmt(metrics.mrr, 2)} mm3/min${previous ? ` (${mrrDelta >= 0 ? "+" : ""}${fmt(mrrDelta, 2)} from previous sample)` : ""}.`
+      : dataMode === "live-unity"
+        ? `Live Unity telemetry is authoritative. Current MRR is ${fmt(metrics.mrr, 2)} mm3/min and machine health is ${fmt(metrics.machineHealth, 0)}%.`
+        : `Simulation engine is authoritative. Calculated MRR is ${fmt(metrics.mrr, 2)} mm3/min at ${fmt(parameters.current, 2)} A and ${fmt(parameters.voltage, 2)} V.`,
     metrics.arcRatio > 0.28
-      ? "Arc ratio is elevated. Increase flushing pressure by 0.3 bar or widen gap distance by 0.005 mm before raising current."
-      : "Gap classifier sees stable spark behavior. Current parameter set is suitable for closed-loop optimization preview.",
-    metrics.remainingToolLife < 35
-      ? "Schedule electrode change before unattended machining. Wear ratio trend is close to the maintenance threshold."
-      : "Electrode wear remains acceptable. Tool life model confidence is supported by B4 and pulse energy correlation.",
+      ? `Arc ratio is elevated at ${fmt(metrics.arcRatio * 100, 1)}%. Increase flushing pressure or widen the gap before raising current.`
+      : `Gap behavior is stable: gap voltage is ${fmt(parameters.gapVoltage, 2)} V and stability is ${fmt(metrics.gapStability, 0)}%.`,
+    metrics.surfaceRoughness > 2.8
+      ? `Surface roughness is high at ${fmt(metrics.surfaceRoughness, 2)} um. Reduce pulse ON or increase pulse OFF if finish quality is the priority.`
+      : metrics.remainingToolLife < 35
+        ? `Tool wear is trending upward. Remaining tool life is ${fmt(metrics.remainingToolLife, 0)}%; plan electrode maintenance.`
+        : `Process appears stable for ${sourceLabel}. Duty cycle is ${fmt(metrics.dutyCycle, 1)}% and tool life remains ${fmt(metrics.remainingToolLife, 0)}%.`,
   ];
 
   return (
-    <Panel title="EDM AI Copilot" eyebrow="Process engineer reasoning" accent="violet">
+    <Panel title="EDM AI Copilot" eyebrow={`Mode-aware reasoning / ${sourceLabel}`} accent="violet">
       <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
         <div className="space-y-3">
           {recommendations.map((item, index) => (
             <div key={item} className="rounded border border-plant-line bg-plant-deck p-4">
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-plant-cyan">
                 <Bot size={16} />
-                Recommendation {index + 1}
+                Observation {index + 1}
               </div>
               <p className="text-sm leading-6 text-plant-text">{item}</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <StatusPill label={`${fmt(metrics.predictionConfidence, 0)}% confidence`} tone="cyan" />
-                <StatusPill label={`${parameters.workpieceMaterial}`} tone="amber" />
-                <StatusPill label={`${fmt(metrics.machineEfficiency, 0)}% efficiency`} tone="green" />
+                <StatusPill label={`MRR ${fmt(metrics.mrr, 2)}`} tone="green" />
+                <StatusPill label={`I ${fmt(parameters.current, 2)} A`} tone="amber" />
+                <StatusPill label={`Health ${fmt(metrics.machineHealth, 0)}%`} tone="cyan" />
               </div>
             </div>
           ))}
@@ -577,17 +845,16 @@ function AICopilot() {
           <div className="text-sm font-semibold uppercase text-plant-text">Virtual Camera Panel</div>
           <div className="mt-4 aspect-video rounded border border-plant-line bg-[radial-gradient(circle_at_50%_52%,rgba(244,178,77,0.45),transparent_12%),radial-gradient(circle_at_52%_50%,rgba(40,215,255,0.28),transparent_21%),#070b12]" />
           <div className="mt-3 space-y-2 text-sm">
+            <VisionRow label="Data source" value={sourceLabel} tone="violet" />
             <VisionRow label="Spark quality" value={metrics.arcRatio < 0.25 ? "Clean pulse train" : "Arc contamination"} tone={metrics.arcRatio < 0.25 ? "green" : "amber"} />
             <VisionRow label="Heat distribution" value={`${fmt(metrics.dielectricTemperature, 1)} degC fluid`} tone={metrics.dielectricTemperature > 30 ? "amber" : "cyan"} />
             <VisionRow label="Electrode wear" value={`${fmt(100 - metrics.remainingToolLife, 0)}% consumed`} tone={metrics.remainingToolLife < 30 ? "red" : "green"} />
-            <VisionRow label="AI confidence" value={`${fmt(metrics.predictionConfidence, 0)}%`} tone="violet" />
           </div>
         </div>
       </div>
     </Panel>
   );
 }
-
 function VisionRow({ label, value, tone }: { label: string; value: string; tone: "cyan" | "amber" | "green" | "red" | "violet" }) {
   return (
     <div className="flex items-center justify-between border-b border-plant-line pb-2">
@@ -650,22 +917,83 @@ function EngineeringWorkspace() {
   );
 }
 
+function csvEscape(value: unknown) {
+  const text = value == null ? "" : String(value);
+  return /[",\n]/.test(text) ? "\"" + text.replace(/"/g, "\"\"") + "\"" : text;
+}
+
 function AnalyticsReports() {
   const history = useTwinStore((state) => state.history);
   const parameters = useTwinStore((state) => state.parameters);
   const metrics = useTwinStore((state) => state.metrics);
+  const dataMode = useTwinStore((state) => state.dataMode);
+  const dataset = useTwinStore((state) => state.dataset);
 
+  const sourceLabel = dataMode === "dataset" ? "Dataset" : dataMode === "live-unity" ? "Live Unity" : "Simulation";
+  const optimizationExport = dataset.loaded
+    ? optimizationObjectives.map((objectiveItem) => {
+        const result = analyzeDatasetOptimization(dataset.rows, objectiveItem.id);
+        return {
+          objective: objectiveItem.label,
+          message: result.message,
+          validSampleCount: result.validSampleCount,
+          excludedSampleCount: result.excludedSampleCount,
+          bestCondition: result.bestCondition
+            ? {
+                sample: result.bestCondition.sample.t !== "" && result.bestCondition.sample.t != null ? result.bestCondition.sample.t : result.bestCondition.rowIndex + 1,
+                rowIndex: result.bestCondition.rowIndex,
+                score: result.bestCondition.score,
+                parameters: result.bestCondition.sample.parameters,
+                metrics: result.bestCondition.sample.metrics,
+              }
+            : null,
+          topFive: result.rankedSamples.slice(0, 5).map((condition) => ({
+            sample: condition.sample.t !== "" && condition.sample.t != null ? condition.sample.t : condition.rowIndex + 1,
+            rowIndex: condition.rowIndex,
+            score: condition.score,
+            parameters: condition.sample.parameters,
+            metrics: condition.sample.metrics,
+          })),
+        };
+      })
+    : [];
   const download = (kind: "json" | "csv") => {
+    const exportRows = history.map((p) => ({
+      timestamp: p.t,
+      current: p.current,
+      voltage: p.voltage,
+      gapVoltage: p.gapVoltage,
+      pulseOn: p.pulseOn,
+      pulseOff: p.pulseOff,
+      dutyCycle: p.dutyCycle,
+      gapDistance: p.gapDistance,
+      dielectricPressure: p.pressure,
+      dielectricFlow: p.flowRate,
+      temperature: p.dielectricTemperature,
+      MRR: p.mrr,
+      TWR: p.toolWearRate,
+      surfaceRoughness: p.surfaceRoughness,
+      machineHealth: p.machineHealth,
+      gapStability: p.gapStability,
+      depthOfCut: parameters.depthOfCut,
+    }));
     const payload =
       kind === "json"
-        ? JSON.stringify({ generatedAt: new Date().toISOString(), parameters, metrics, history }, null, 2)
-        : ["t,voltage,current,power,mrr,ra,toolLife,health", ...history.map((p) => [p.t, p.voltage, p.current, p.power, p.mrr, p.surfaceRoughness, p.remainingToolLife, p.machineHealth].join(","))].join("\n");
+        ? JSON.stringify({ generatedAt: new Date().toISOString(), dataSource: sourceLabel, originalDataset: dataset.fileName, parameters, metrics, history: exportRows, optimization: optimizationExport }, null, 2)
+        : [
+            "dataSource,originalDataset,timestamp,current,voltage,gapVoltage,pulseOn,pulseOff,dutyCycle,gapDistance,dielectricPressure,dielectricFlow,temperature,MRR,TWR,surfaceRoughness,machineHealth,gapStability,depthOfCut",
+            ...exportRows.map((row) =>
+              [sourceLabel, dataset.fileName ?? "", row.timestamp, row.current, row.voltage, row.gapVoltage, row.pulseOn, row.pulseOff, row.dutyCycle, row.gapDistance, row.dielectricPressure, row.dielectricFlow, row.temperature, row.MRR, row.TWR, row.surfaceRoughness, row.machineHealth, row.gapStability, row.depthOfCut].map(csvEscape).join(","),
+            ),
+          ].join("\n");
     const blob = new Blob([payload], { type: kind === "json" ? "application/json" : "text/csv" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `edm-digital-twin-report.${kind}`;
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
   };
 
@@ -693,14 +1021,13 @@ function AnalyticsReports() {
             Export CSV
           </button>
           <div className="rounded border border-plant-line bg-plant-deck p-4 text-sm leading-6 text-plant-muted">
-            Report package covers engineering state, machine health, maintenance indicators, simulation metrics, and AI optimization context.
+            Export follows the active source: {sourceLabel}{dataset.fileName ? ` / ${dataset.fileName}` : ""}. Dataset exports preserve imported MRR and TWR values.
           </div>
         </div>
       </div>
     </Panel>
   );
 }
-
 function AlarmCenter() {
   const alarms = useTwinStore((state) => state.alarms);
   const alarmHistory = useTwinStore((state) => state.alarmHistory);
@@ -799,7 +1126,7 @@ function DeveloperDiagnostics() {
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
             <MetricCard label="Gateway" value={connectionStatus === "connected" ? "1" : "0"} unit="" tone={connectionStatus === "connected" ? "green" : "red"} sublabel={connectionStatus} />
-            <MetricCard label="Mode" value={dataMode === "live-unity" ? "Live" : "Sim"} unit="" tone={dataMode === "live-unity" ? "cyan" : "amber"} sublabel="React source" />
+            <MetricCard label="Mode" value={dataMode === "dataset" ? "Data" : dataMode === "live-unity" ? "Live" : "Sim"} unit="" tone={dataMode === "live-unity" ? "cyan" : dataMode === "dataset" ? "green" : "amber"} sublabel="React source" />
             <MetricCard label="Unity" value={machineState === "OFFLINE" ? "0" : "1"} unit="" tone={machineState === "OFFLINE" ? "red" : "green"} sublabel={machineState} />
             <MetricCard label="Ping" value={`${diagnostics.latencyMs ?? 0}`} unit="ms" tone={diagnostics.latencyMs == null ? "amber" : "green"} sublabel="Gateway ack latency" />
             <MetricCard label="Packets Sent" value={`${diagnostics.packetsSent}`} unit="" tone="cyan" sublabel="React outbound" />
@@ -906,6 +1233,14 @@ function Dashboard({ active }: { active: string }) {
           <TrendChart dataKey="current" color="#f4b24d" title="Current Trend" unit="A" />
         </div>
       </div>
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+        <TrendChart dataKey="pulseOn" color="#3ddc97" title="Pulse ON Trend" unit="us" />
+        <TrendChart dataKey="toolWearRate" color="#ff6f91" title="Tool Wear Rate (TWR)" unit="%/min" />
+        <TrendChart dataKey="dutyCycle" color="#b587ff" title="Duty Cycle Trend" unit="%" />
+        <TrendChart dataKey="mrr" color="#61e3ff" title="Material Removal Rate (MRR)" unit="mm3/min" />
+      </div>
+      {showControl ? <DatasetPanel /> : null}
+      {showControl ? <OptimizationEngine /> : null}
       {showControl ? <LiveCommandPanel /> : null}
       {showControl ? <MachineControl /> : null}
       {showSensors ? <SensorFusion /> : null}

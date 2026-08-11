@@ -107,7 +107,10 @@ export class RealtimeClient {
 
     const envelope: GatewayMessage = {
       schemaVersion: message.schemaVersion ?? "1.0",
-      messageId: message.messageId ?? crypto.randomUUID(),
+      messageId:
+  message.messageId ??
+  (globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`),
       timestamp: message.timestamp ?? new Date().toISOString(),
       source: message.source ?? this.role,
       type: message.type,

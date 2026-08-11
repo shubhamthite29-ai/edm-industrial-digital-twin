@@ -12,8 +12,12 @@ namespace EDMDigitalTwin.Machine
         public float gapVoltageV = 72f;
         public float pulseOnUs = 150f;
         public float pulseOffUs = 45f;
+        public float gapDistanceMm = 0.055f;
         public float servoFeedPercent = 0.32f;
         public float flushingPressureBar = 2.8f;
+        public float flowRateLpm = 8f;
+        public float conductivityUsCm = 5f;
+        public float openCircuitVoltageV = 100f;
         public float toolDiameterMm = 8f;
         public string workpieceMaterial = "H13 Steel";
         public string electrodeMaterial = "Copper";
@@ -31,8 +35,12 @@ namespace EDMDigitalTwin.Machine
             if (patch.gapVoltageV.HasValue) gapVoltageV = patch.gapVoltageV.Value;
             if (patch.pulseOnUs.HasValue) pulseOnUs = patch.pulseOnUs.Value;
             if (patch.pulseOffUs.HasValue) pulseOffUs = patch.pulseOffUs.Value;
+            if (patch.gapDistanceMm.HasValue) gapDistanceMm = patch.gapDistanceMm.Value;
             if (patch.servoFeedPercent.HasValue) servoFeedPercent = patch.servoFeedPercent.Value;
             if (patch.flushingPressureBar.HasValue) flushingPressureBar = patch.flushingPressureBar.Value;
+            if (patch.flowRateLpm.HasValue) flowRateLpm = patch.flowRateLpm.Value;
+            if (patch.conductivityUsCm.HasValue) conductivityUsCm = patch.conductivityUsCm.Value;
+            if (patch.openCircuitVoltageV.HasValue) openCircuitVoltageV = patch.openCircuitVoltageV.Value;
             if (patch.toolDiameterMm.HasValue) toolDiameterMm = patch.toolDiameterMm.Value;
             if (!string.IsNullOrWhiteSpace(patch.workpieceMaterial)) workpieceMaterial = patch.workpieceMaterial;
             if (!string.IsNullOrWhiteSpace(patch.electrodeMaterial)) electrodeMaterial = patch.electrodeMaterial;
@@ -51,8 +59,12 @@ namespace EDMDigitalTwin.Machine
         public float? gapVoltageV;
         public float? pulseOnUs;
         public float? pulseOffUs;
+        public float? gapDistanceMm;
         public float? servoFeedPercent;
         public float? flushingPressureBar;
+        public float? flowRateLpm;
+        public float? conductivityUsCm;
+        public float? openCircuitVoltageV;
         public float? toolDiameterMm;
         public string workpieceMaterial;
         public string electrodeMaterial;

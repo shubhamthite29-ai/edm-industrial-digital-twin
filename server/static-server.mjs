@@ -18,9 +18,18 @@ const mimeTypes = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".ico": "image/x-icon",
+  ".data": "application/octet-stream",
+  ".wasm": "application/wasm",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
+
+function unityWebGLContentType(assetPath) {
+  if (assetPath.endsWith(".wasm.br")) return "application/wasm";
+  if (assetPath.endsWith(".framework.js.br")) return "text/javascript; charset=utf-8";
+  if (assetPath.endsWith(".data.br")) return "application/octet-stream";
+  return null;
+}
 
 function resolveAsset(url) {
   const cleanUrl = decodeURIComponent((url || "/").split("?")[0]);
@@ -35,8 +44,12 @@ function resolveAsset(url) {
 const server = createServer((request, response) => {
   const assetPath = resolveAsset(request.url);
   const extension = extname(assetPath);
+  const unityContentType = unityWebGLContentType(assetPath);
 
-  response.setHeader("Content-Type", mimeTypes[extension] || "application/octet-stream");
+  response.setHeader("Content-Type", unityContentType || mimeTypes[extension] || "application/octet-stream");
+  if (unityContentType) {
+    response.setHeader("Content-Encoding", "br");
+  }
   response.setHeader("Cache-Control", extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable");
 
   createReadStream(assetPath)
