@@ -1,5 +1,6 @@
 import { Maximize2, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { installUnityLocalGateway, registerUnityWebGLInstance, unregisterUnityWebGLInstance, type UnityInstance } from "../services/unityWebGLBridge";
 import type { CameraView, ConnectionStatus, MachineLifecycleState, UnityTelemetry } from "../types/twin";
 
 interface UnityWebGLViewerProps {
@@ -7,11 +8,6 @@ interface UnityWebGLViewerProps {
   machineState: MachineLifecycleState;
   telemetry: UnityTelemetry;
   cameraView: CameraView;
-}
-
-interface UnityInstance {
-  SetFullscreen: (enabled: 0 | 1) => void;
-  Quit?: () => Promise<void>;
 }
 
 interface UnityConfig {
@@ -101,6 +97,7 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
     if (!canvas) return undefined;
 
     const loaderUrl = versionedUnityAsset(`${buildUrl}/${buildName}.loader.js`);
+    installUnityLocalGateway();
     setLoadState("loading");
     setMessage("Loading Unity WebGL...");
 
@@ -116,6 +113,7 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
       .then((unityInstance) => {
         if (!unityInstance || !mountedRef.current) return;
         unityRef.current = unityInstance;
+        registerUnityWebGLInstance(unityInstance);
         setLoadProgress(1);
         setLoadState("ready");
         setMessage("Unity WebGL ready");
@@ -130,6 +128,7 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
       mountedRef.current = false;
       const unityInstance = unityRef.current;
       unityRef.current = null;
+      if (unityInstance) unregisterUnityWebGLInstance(unityInstance);
       unityInstance?.Quit?.().catch(() => undefined);
     };
   }, [config]);

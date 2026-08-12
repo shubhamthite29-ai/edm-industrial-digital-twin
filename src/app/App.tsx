@@ -122,6 +122,7 @@ function ShellHeader() {
   const dataMode = useTwinStore((state) => state.dataMode);
   const setDataMode = useTwinStore((state) => state.setDataMode);
   const connectionStatus = useTwinStore((state) => state.connectionStatus);
+  const unityWebGLReady = useTwinStore((state) => state.unityWebGLReady);
   const machineStatus = useTwinStore((state) => state.machineStatus);
   const role = useTwinStore((state) => state.role);
   const setRole = useTwinStore((state) => state.setRole);
@@ -129,7 +130,7 @@ function ShellHeader() {
   const alarms = useTwinStore((state) => state.alarms);
   const dataset = useTwinStore((state) => state.dataset);
   const setDatasetPlaying = useTwinStore((state) => state.setDatasetPlaying);
-  const liveModeDisconnected = dataMode === "live-unity" && connectionStatus !== "connected";
+  const liveModeDisconnected = dataMode === "live-unity" && connectionStatus !== "connected" && !unityWebGLReady;
   const runActive = dataMode === "dataset" ? dataset.playing : running;
 
   const handleRunToggle = () => {
@@ -161,6 +162,7 @@ function ShellHeader() {
       <div className="flex flex-wrap items-center gap-2">
         <StatusPill label={machineStatus} tone={machineStatus === "Machining" ? "green" : "red"} />
         <StatusPill label={connectionLabel(connectionStatus)} tone={connectionTone(connectionStatus)} />
+        {dataMode === "live-unity" ? <StatusPill label={unityWebGLReady ? "Unity WebGL Ready" : "Unity WebGL Loading"} tone={unityWebGLReady ? "green" : "amber"} /> : null}
         <StatusPill label={`${fmt(metrics.twinAccuracy, 0)}% Twin Sync`} tone="cyan" />
         <StatusPill label={`${alarms.length} Alarms`} tone={alarms.some((alarm) => alarm.level === "CRITICAL") ? "red" : alarms.length ? "amber" : "green"} />
         <div className="inline-flex h-9 overflow-hidden rounded border border-plant-line bg-plant-void">
@@ -540,7 +542,8 @@ function LiveCommandPanel() {
   const machineState = useTwinStore((state) => state.machineState);
   const telemetry = useTwinStore((state) => state.unityTelemetry);
   const cameraView = useTwinStore((state) => state.cameraView);
-  const commandDisabled = dataMode !== "live-unity" || connectionStatus !== "connected";
+  const unityWebGLReady = useTwinStore((state) => state.unityWebGLReady);
+  const commandDisabled = dataMode !== "live-unity" || (connectionStatus !== "connected" && !unityWebGLReady);
 
   const commands = [
     ["Start", startLiveMachining, "green"],

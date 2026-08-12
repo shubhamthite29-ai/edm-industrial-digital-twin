@@ -55,7 +55,7 @@ export class RealtimeClient {
   private status: ConnectionStatus = "disconnected";
 
   constructor(options: RealtimeClientOptions = {}) {
-    this.url = options.url ?? "ws://localhost:8080";
+    this.url = options.url ?? import.meta.env.VITE_LIVE_WS_URL ?? (import.meta.env.DEV ? "ws://localhost:8080" : "");
     this.role = options.role ?? "react";
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
   }
@@ -65,6 +65,19 @@ export class RealtimeClient {
   }
 
   connect() {
+    if (!this.url) {
+      this.updateDiagnostics({
+        lastMessages: this.pushLog({
+          direction: "system",
+          timestamp: new Date().toISOString(),
+          type: "backend.disabled",
+          summary: "No public WebSocket backend configured. Browser-local Unity WebGL control remains available.",
+        }),
+      });
+      this.setStatus("disconnected");
+      return;
+    }
+
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
       return;
     }

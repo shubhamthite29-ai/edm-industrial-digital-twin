@@ -166,6 +166,12 @@ namespace EDMDigitalTwin.Networking
 #endif
         }
 
+        public void HandleExternalMessage(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
+            HandleMessage(json);
+        }
+
         // ── WebGL Bridge Callbacks ─────────────────────────────────────────────
 #if UNITY_WEBGL && !UNITY_EDITOR
         private void OnBridgeOpen()

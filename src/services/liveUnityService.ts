@@ -2,6 +2,7 @@ import { machineCommandService } from "../Machine/MachineCommandService";
 import { cameraCommandService } from "../Machine/CameraCommandService";
 import { realtimeClient, type GatewayMessage } from "../Realtime/RealtimeClient";
 import { useTwinStore } from "../store/useTwinStore";
+import { onLocalUnityMessage, onUnityWebGLReadyChange, sendLocalUnityMessage } from "./unityWebGLBridge";
 import type { CameraView, MachineLifecycleState, MachineParameters } from "../types/twin";
 
 let initialized = false;
@@ -129,6 +130,12 @@ export function initializeLiveUnityService() {
   if (initialized) return;
   initialized = true;
 
+  onUnityWebGLReadyChange((ready) => {
+    useTwinStore.getState().setUnityWebGLReady(ready);
+  });
+
+  onLocalUnityMessage(handleMessage);
+
   realtimeClient.onStatusChange((status) => {
     useTwinStore.getState().setConnectionStatus(status);
     if (status === "connected") {
@@ -151,8 +158,23 @@ export function initializeLiveUnityService() {
   realtimeClient.connect();
 }
 
+function sendLiveMessage(message: GatewayMessage) {
+  const gatewaySent = realtimeClient.getStatus() === "connected" ? realtimeClient.send(message) : false;
+  const localSent = sendLocalUnityMessage(message);
+  return gatewaySent || localSent;
+}
+
+function sendMachineCommand(command: string) {
+  return sendLiveMessage({
+    type: "machine.command",
+    payload: {
+      command,
+    },
+  });
+}
+
 export function startLiveMachining() {
-  const sent = machineCommandService.startMachining();
+  const sent = sendMachineCommand("start") || machineCommandService.startMachining();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Machining");
     useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Start command sent.");
@@ -162,7 +184,7 @@ export function startLiveMachining() {
 }
 
 export function stopLiveMachining() {
-  const sent = machineCommandService.stopMachining();
+  const sent = sendMachineCommand("stop") || machineCommandService.stopMachining();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Idle");
     useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Stop command sent.");
@@ -172,7 +194,7 @@ export function stopLiveMachining() {
 }
 
 export function resetLiveMachine() {
-  const sent = machineCommandService.resetMachine();
+  const sent = sendMachineCommand("reset") || machineCommandService.resetMachine();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Idle");
     useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Reset command sent.");
@@ -182,13 +204,13 @@ export function resetLiveMachine() {
 }
 
 export function homeLiveMachine() {
-  const sent = machineCommandService.homeMachine();
+  const sent = sendMachineCommand("home") || machineCommandService.homeMachine();
   if (sent) useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Home command sent.");
   return sent;
 }
 
 export function emergencyStopLiveMachine() {
-  const sent = machineCommandService.emergencyStop();
+  const sent = sendMachineCommand("emergency_stop") || machineCommandService.emergencyStop();
   if (sent) {
     useTwinStore.getState().setMachineStatus("Idle");
     useTwinStore.getState().addEvent("EMERGENCY", "COMMAND", "Emergency Stop command sent.");
@@ -198,7 +220,7 @@ export function emergencyStopLiveMachine() {
 }
 
 export function pauseLiveMachine() {
-  const sent = machineCommandService.pauseMachining();
+  const sent = sendMachineCommand("pause") || machineCommandService.pauseMachining();
   if (sent) {
     useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Pause command sent.");
     useTwinStore.getState().pushNotification("INFO", "Machine Paused");
@@ -207,7 +229,7 @@ export function pauseLiveMachine() {
 }
 
 export function resumeLiveMachine() {
-  const sent = machineCommandService.resumeMachining();
+  const sent = sendMachineCommand("resume") || machineCommandService.resumeMachining();
   if (sent) {
     useTwinStore.getState().addEvent("INFO", "COMMAND", "Machine Resume command sent.");
     useTwinStore.getState().pushNotification("INFO", "Machine Resumed");
@@ -216,7 +238,7 @@ export function resumeLiveMachine() {
 }
 
 export function requestLiveStatus() {
-  return machineCommandService.requestStatus();
+  return sendMachineCommand("request_status") || machineCommandService.requestStatus();
 }
 
 export function pingGateway() {
@@ -225,5 +247,11 @@ export function pingGateway() {
 
 export function setLiveCameraView(view: CameraView) {
   useTwinStore.getState().setCameraView(view);
-  return cameraCommandService.setView(view);
+  const sent = sendLiveMessage({
+    type: "camera.command",
+    payload: {
+      view,
+    },
+  });
+  return sent || cameraCommandService.setView(view);
 }

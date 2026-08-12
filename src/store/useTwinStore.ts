@@ -26,6 +26,7 @@ interface TwinState {
   running: boolean;
   dataMode: DataMode;
   connectionStatus: ConnectionStatus;
+  unityWebGLReady: boolean;
   machineStatus: MachineStatus;
   machineState: MachineLifecycleState;
   unityTelemetry: UnityTelemetry;
@@ -52,6 +53,7 @@ interface TwinState {
   restartDataset: () => void;
   advanceDataset: () => void;
   setConnectionStatus: (connectionStatus: ConnectionStatus) => void;
+  setUnityWebGLReady: (ready: boolean) => void;
   setMachineStatus: (machineStatus: MachineStatus) => void;
   setMachineState: (machineState: MachineLifecycleState) => void;
   setCameraView: (cameraView: CameraView) => void;
@@ -265,6 +267,7 @@ export const useTwinStore = create<TwinState>((set) => ({
   running: true,
   dataMode: "simulation",
   connectionStatus: "disconnected",
+  unityWebGLReady: false,
   machineStatus: "Machining",
   machineState: "READY",
   cameraView: "isometric",
@@ -373,6 +376,13 @@ export const useTwinStore = create<TwinState>((set) => ({
     }),
   setConnectionStatus: (connectionStatus) =>
     set((state) => {
+      if (state.connectionStatus === connectionStatus) return state;
+
+      const shouldRecord = connectionStatus === "connected" || state.connectionStatus === "connected";
+      if (!shouldRecord) {
+        return { connectionStatus };
+      }
+
       const message = `Dashboard gateway connection ${connectionStatus}.`;
       const eventLog = [buildEvent(connectionStatus === "connected" ? "INFO" : "WARNING", "CONNECTION", message), ...state.eventLog].slice(0, 100);
       safeWriteJson(persistedEventsKey, eventLog);
@@ -381,6 +391,11 @@ export const useTwinStore = create<TwinState>((set) => ({
         eventLog,
         notifications: [buildNotification(connectionStatus === "connected" ? "INFO" : "WARNING", connectionStatus === "connected" ? "Connected" : "Disconnected"), ...state.notifications].slice(0, 6),
       };
+    }),
+  setUnityWebGLReady: (ready) =>
+    set((state) => {
+      if (state.unityWebGLReady === ready) return state;
+      return { unityWebGLReady: ready };
     }),
   setMachineStatus: (machineStatus) => set({ machineStatus, running: machineStatus === "Machining" }),
   setMachineState: (machineState) => set((state) => ({ machineState, unityTelemetry: { ...state.unityTelemetry, machineState } })),
