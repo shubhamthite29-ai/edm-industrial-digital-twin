@@ -189,7 +189,7 @@ function ShellHeader({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMe
   };
 
   return (
-    <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-plant-line bg-plant-deck/95 px-3 py-2 sm:px-5">
+    <header className="sticky top-0 z-30 md:static flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-plant-line bg-plant-deck/95 px-3 py-2 backdrop-blur sm:px-5">
       <div className="flex items-center gap-2.5 sm:gap-3">
         <button
           type="button"
@@ -2315,7 +2315,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-plant-void text-plant-text overflow-x-hidden">
+    <div className="min-h-screen bg-plant-void text-plant-text overflow-x-clip">
       <NotificationStack />
       {mobileMenuOpen ? <MobileNavDrawer active={active} onClose={() => setMobileMenuOpen(false)} /> : null}
       <div className="min-h-screen">
