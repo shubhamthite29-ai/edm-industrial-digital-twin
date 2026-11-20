@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   X,
+  LogOut,
 } from "lucide-react";
 import {
   Area,
@@ -41,6 +42,10 @@ import { StatusPill } from "../components/StatusPill";
 import { UnityWebGLViewer } from "../components/UnityWebGLViewer";
 import { ToolheadDigitalTwin } from "../components/ToolheadDigitalTwin";
 import { PhysicalMachineMlPanel } from "../components/PhysicalMachineMlPanel";
+import { LoginLandingPage } from "../components/LoginLandingPage";
+import { GuestDemoShowcase } from "../components/GuestDemoShowcase";
+import { useAuthStore } from "../store/useAuthStore";
+import { roleDisplayLabel } from "../types/auth";
 import { sensors, sensorGroups } from "../data/sensors";
 import { useInterval } from "../hooks/useInterval";
 import { compareWhatIf } from "../services/edmCalculations";
@@ -76,7 +81,7 @@ import { realtimeClient } from "../Realtime/RealtimeClient";
 import { machineParameterService } from "../Machine/MachineParameterService";
 import { initializeToolheadService } from "../services/toolheadService";
 import { useTwinStore } from "../store/useTwinStore";
-import type { CameraView, ConnectionStatus, DashboardNotification, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
+import type { CameraView, ConnectionStatus, DashboardNotification, DataMode, MachineMode, MachineParameters } from "../types/twin";
 
 const modules = [
   { key: "dashboard", label: "Overview", icon: Gauge },
@@ -99,7 +104,6 @@ const legacyModuleGroups: Record<string, string> = {
   "research-mode": "analytics",
 };
 
-const roles: UserRole[] = ["Operator", "Production Engineer", "Maintenance Engineer", "Research Mode", "Administrator"];
 const machineModes: MachineMode[] = ["Die Sinking", "Wire Cut", "EDM Drilling"];
 const electrodeMaterials: MachineParameters["electrodeMaterial"][] = ["Copper", "Graphite", "Brass Wire", "Tungsten Copper"];
 const workpieceMaterials: MachineParameters["workpieceMaterial"][] = ["H13 Steel", "Titanium Ti-6Al-4V", "Inconel 718", "Tool Steel D2"];
@@ -146,12 +150,16 @@ function ShellHeader({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMe
   const connectionStatus = useTwinStore((state) => state.connectionStatus);
   const unityWebGLReady = useTwinStore((state) => state.unityWebGLReady);
   const machineStatus = useTwinStore((state) => state.machineStatus);
-  const role = useTwinStore((state) => state.role);
-  const setRole = useTwinStore((state) => state.setRole);
   const metrics = useTwinStore((state) => state.metrics);
   const alarms = useTwinStore((state) => state.alarms);
   const dataset = useTwinStore((state) => state.dataset);
   const setDatasetPlaying = useTwinStore((state) => state.setDatasetPlaying);
+  const pushNotification = useTwinStore((state) => state.pushNotification);
+
+  const user = useAuthStore((state) => state.user);
+  const authRole = useAuthStore((state) => state.role);
+  const signOut = useAuthStore((state) => state.signOut);
+
   const liveModeDisconnected = dataMode === "live-unity" && connectionStatus !== "connected" && !unityWebGLReady;
   const runActive = dataMode === "dataset" ? dataset.playing : running;
 
@@ -163,6 +171,12 @@ function ShellHeader({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMe
 
     if (dataMode === "dataset") {
       setDatasetPlaying(!dataset.playing);
+      return;
+    }
+
+    // Physical live-unity execution guard
+    if (authRole === "guest" || authRole === "research") {
+      pushNotification("WARNING", "Physical machine execution restricted. Control requires Administrator or HOD.");
       return;
     }
 
@@ -222,16 +236,37 @@ function ShellHeader({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMe
             </button>
           ))}
         </div>
-        <select
-          className="h-9 rounded border border-plant-line bg-plant-void px-2 text-xs text-plant-text outline-none"
-          value={role}
-          onChange={(event) => setRole(event.target.value as UserRole)}
-          aria-label="User role"
-        >
-          {roles.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
+
+        {/* Verified Role Badge & Sign Out Button */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div
+            className={`inline-flex h-9 items-center gap-1.5 rounded border px-2.5 sm:px-3 text-xs font-semibold uppercase tracking-wider ${
+              authRole === "administrator"
+                ? "border-plant-red/60 bg-plant-red/15 text-plant-red"
+                : authRole === "hod"
+                ? "border-purple-400/60 bg-purple-500/15 text-purple-300"
+                : authRole === "research"
+                ? "border-plant-amber/60 bg-plant-amber/15 text-plant-amber"
+                : "border-plant-cyan/60 bg-plant-cyan/15 text-plant-cyan"
+            }`}
+            title={`Session: ${user?.email || "Guest"}`}
+          >
+            <ShieldCheck size={14} />
+            <span>{roleDisplayLabel(authRole)}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={signOut}
+            className="inline-flex h-9 items-center gap-1.5 rounded border border-plant-line bg-plant-void px-2.5 sm:px-3 text-xs font-semibold uppercase tracking-wider text-plant-muted transition hover:border-plant-red/60 hover:text-plant-red active:scale-95"
+            title="Sign Out of Session"
+            aria-label="Sign Out"
+          >
+            <LogOut size={14} />
+            <span className="hidden md:inline">Sign Out</span>
+          </button>
+        </div>
+
         <button
           className={`inline-flex h-9 items-center gap-1.5 sm:gap-2 rounded px-3 text-xs font-semibold uppercase tracking-wide ${
             runActive ? "bg-plant-red text-white" : "bg-plant-green text-plant-void"
@@ -249,6 +284,17 @@ function ShellHeader({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMe
 }
 
 function MobileNavDrawer({ active, onClose }: { active: string; onClose: () => void }) {
+  const permissions = useAuthStore((state) => state.permissions);
+  const visibleModules = useMemo(() => {
+    return modules.filter((item) => {
+      if (item.key === "settings") return permissions.canAccessSettings;
+      if (item.key === "machine-control") return permissions.canControlPhysicalMachine;
+      if (item.key === "toolhead") return permissions.canControlPhysicalMachine;
+      if (item.key === "analytics") return permissions.canExportReports;
+      return true;
+    });
+  }, [permissions]);
+
   return (
     <div className="fixed inset-0 z-50 flex md:hidden">
       <div
@@ -273,7 +319,7 @@ function MobileNavDrawer({ active, onClose }: { active: string; onClose: () => v
         </div>
 
         <nav className="mt-4 flex flex-1 flex-col gap-1.5 overflow-y-auto">
-          {modules.map((item) => {
+          {visibleModules.map((item) => {
             const Icon = item.icon;
             const selected = item.key === active;
             return (
@@ -303,6 +349,17 @@ function MobileNavDrawer({ active, onClose }: { active: string; onClose: () => v
 }
 
 function Sidebar({ active }: { active: string }) {
+  const permissions = useAuthStore((state) => state.permissions);
+  const visibleModules = useMemo(() => {
+    return modules.filter((item) => {
+      if (item.key === "settings") return permissions.canAccessSettings;
+      if (item.key === "machine-control") return permissions.canControlPhysicalMachine;
+      if (item.key === "toolhead") return permissions.canControlPhysicalMachine;
+      if (item.key === "analytics") return permissions.canExportReports;
+      return true;
+    });
+  }, [permissions]);
+
   return (
     <nav aria-label="Dashboard navigation" className="sticky top-2 z-40 mx-4 mt-3 hidden md:block overflow-x-auto rounded border border-plant-line bg-plant-deck/95 p-2 shadow-glow backdrop-blur">
       <div className="flex min-w-max items-center gap-1">
@@ -310,7 +367,7 @@ function Sidebar({ active }: { active: string }) {
           <div className="text-[9px] uppercase tracking-[0.2em] text-plant-muted">EDM Cell</div>
           <div className="mt-0.5 font-mono text-xs text-plant-text">CELL-EDM-04</div>
         </div>
-        {modules.map((item) => {
+        {visibleModules.map((item) => {
           const Icon = item.icon;
           const selected = item.key === active;
           return (
@@ -2084,13 +2141,58 @@ function NotificationStack() {
 }
 
 function Dashboard({ active }: { active: string }) {
+  const permissions = useAuthStore((state) => state.permissions);
+  const role = useAuthStore((state) => state.role);
+
+  // Strict route authorization guards
+  if (active === "machine-control" && !permissions.canControlPhysicalMachine) {
+    return (
+      <main className="p-4">
+        <Panel title="Access Restricted" eyebrow="Role Authorization Required" accent="red">
+          <div className="p-6 text-xs text-plant-red space-y-3">
+            <div className="text-sm font-bold uppercase tracking-wider">Physical Machine Control Restricted</div>
+            <p className="text-plant-muted text-xs leading-relaxed max-w-xl">
+              Real-time physical hardware execution and PLC parameter writeback on the ELEKTRA PULS S-50 ZNC
+              are restricted to authorized institutional Administrator and HOD personnel.
+            </p>
+            <div className="pt-2">
+              <Link to="/" className="inline-flex items-center gap-2 rounded bg-plant-cyan px-4 py-2 text-xs font-semibold uppercase text-plant-void hover:bg-plant-cyan/90 transition">
+                Return to Overview
+              </Link>
+            </div>
+          </div>
+        </Panel>
+      </main>
+    );
+  }
+
+  if (active === "settings" && !permissions.canAccessSettings) {
+    return (
+      <main className="p-4">
+        <Panel title="Access Restricted" eyebrow="Role Authorization Required" accent="red">
+          <div className="p-6 text-xs text-plant-red space-y-3">
+            <div className="text-sm font-bold uppercase tracking-wider">Platform Diagnostics Restricted</div>
+            <p className="text-plant-muted text-xs leading-relaxed max-w-xl">
+              Internal MQTT gateway telemetry, DAQ diagnostics, and platform secrets require verified Administrator or HOD authorization.
+            </p>
+            <div className="pt-2">
+              <Link to="/" className="inline-flex items-center gap-2 rounded bg-plant-cyan px-4 py-2 text-xs font-semibold uppercase text-plant-void hover:bg-plant-cyan/90 transition">
+                Return to Overview
+              </Link>
+            </div>
+          </div>
+        </Panel>
+      </main>
+    );
+  }
+
   const overview = active === "dashboard";
   const showTwin = overview || active === "digital-twin" || active === "machine-control";
-  const showToolheadTwin = overview || active === "digital-twin" || active === "machine-control" || active === "toolhead";
-  const showMachineControl = overview || active === "digital-twin" || active === "machine-control";
-  const showAnalysis = overview || active === "analytics";
+  const showToolheadTwin = (overview || active === "digital-twin" || active === "machine-control" || active === "toolhead") && permissions.canControlPhysicalMachine;
+  const showMachineControl = (overview || active === "digital-twin" || active === "machine-control") && permissions.canControlPhysicalMachine;
+  const showAnalysis = (overview || active === "analytics") && permissions.canExportReports;
   const showMl = overview || active === "predictions";
-  const analysisWorkspace = active === "analytics";
+  const analysisWorkspace = active === "analytics" && permissions.canExportReports;
 
   return (
     <main className="space-y-4 p-4">
@@ -2100,7 +2202,7 @@ function Dashboard({ active }: { active: string }) {
         <section aria-label="Digital Twin and machine control" className="space-y-4">
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
             <MachineView />
-            <LiveCommandPanel />
+            {permissions.canControlPhysicalMachine ? <LiveCommandPanel /> : null}
           </div>
           {showMachineControl ? <MachineControl /> : null}
           {showMachineControl ? <DatasetPanel /> : null}
@@ -2131,7 +2233,7 @@ function Dashboard({ active }: { active: string }) {
         </section>
       ) : null}
 
-      {showMl ? <OptimizationEngine /> : null}
+      {showMl ? (role === "guest" ? <GuestDemoShowcase /> : <OptimizationEngine />) : null}
 
       {active === "digital-twin" ? <SensorFusion /> : null}
       {active === "digital-twin" ? <EngineeringWorkspace /> : null}
@@ -2139,7 +2241,7 @@ function Dashboard({ active }: { active: string }) {
       {analysisWorkspace ? <Maintenance /> : null}
       {analysisWorkspace ? <AlarmCenter /> : null}
       {analysisWorkspace ? <ResearchMode /> : null}
-      {active === "settings" ? (
+      {active === "settings" && permissions.canAccessSettings ? (
         <>
           <Panel title="Platform Settings" eyebrow="Role and integration status" accent="cyan">
             <div className="grid gap-3 md:grid-cols-3">
@@ -2157,17 +2259,27 @@ function Dashboard({ active }: { active: string }) {
 }
 
 export default function App() {
+  const { user, status } = useAuthStore();
   const location = useLocation();
   const active = currentModule(location.pathname);
   const tick = useTwinStore((state) => state.tick);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    initializeLiveUnityService();
-    initializeToolheadService();
-  }, []);
+    if (user) {
+      initializeLiveUnityService();
+      initializeToolheadService();
+    }
+  }, [user]);
 
-  useInterval(tick, 1000);
+  useInterval(() => {
+    if (user) tick();
+  }, 1000);
+
+  // Unauthenticated users see the Login Landing Page
+  if (!user || status === "unauthenticated") {
+    return <LoginLandingPage />;
+  }
 
   return (
     <div className="min-h-screen bg-plant-void text-plant-text overflow-x-hidden">

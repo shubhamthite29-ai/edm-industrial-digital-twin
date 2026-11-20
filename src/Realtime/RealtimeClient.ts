@@ -1,4 +1,5 @@
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
+import { authService } from "../services/authService";
 
 export interface GatewayMessage {
   schemaVersion?: string;
@@ -71,6 +72,21 @@ export class RealtimeClient {
   }
 
   connect() {
+    // Physical gateway connection is restricted to Administrator and HOD
+    const session = authService.getCurrentSession();
+    if (!session || session.user.role === "guest" || session.user.role === "research") {
+      this.updateDiagnostics({
+        lastMessages: this.pushLog({
+          direction: "system",
+          timestamp: new Date().toISOString(),
+          type: "backend.restricted",
+          summary: "Physical gateway connection restricted to Administrator and HOD. Browser-local simulation active.",
+        }),
+      });
+      this.setStatus("disconnected");
+      return;
+    }
+
     if (!this.url) {
       this.updateDiagnostics({
         lastMessages: this.pushLog({
@@ -92,7 +108,12 @@ export class RealtimeClient {
     this.setStatus("connecting");
 
     try {
-      this.socket = new WebSocket(this.url);
+      const wsUrl = new URL(this.url);
+      wsUrl.searchParams.set("role", this.role);
+      if (session?.token) {
+        wsUrl.searchParams.set("token", session.token);
+      }
+      this.socket = new WebSocket(wsUrl.toString());
       this.socket.addEventListener("open", this.handleOpen);
       this.socket.addEventListener("message", this.handleMessage);
       this.socket.addEventListener("close", this.handleClose);

@@ -15,6 +15,7 @@
     "start:all": "powershell -ExecutionPolicy Bypass -File scripts/start-all.ps1",
     "toolhead:physical": "powershell -ExecutionPolicy Bypass -File scripts/start-toolhead-physical.ps1",
     "ml:api": "powershell -ExecutionPolicy Bypass -File scripts/start-ml-api.ps1",
+    "test:auth": "node --experimental-strip-types scripts/test-auth-and-security.js",
     "typecheck": "tsc -b",
     "lint": "tsc -b"
   },

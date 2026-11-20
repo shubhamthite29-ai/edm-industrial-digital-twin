@@ -2,8 +2,10 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import {
+  AUTH_ROLES,
   CLIENT_ROLES,
   MESSAGE_TYPES,
+  PROTECTED_CONTROL_MESSAGES,
   createAck,
   createEnvelope,
   createError,
@@ -13,6 +15,29 @@ import {
   parseJsonMessage,
   validateMessage,
 } from "./protocol.js";
+
+function resolveAuthRole(token, role) {
+  if (role === CLIENT_ROLES.ESP32 || role === CLIENT_ROLES.UNITY) {
+    return AUTH_ROLES.ADMINISTRATOR;
+  }
+  if (!token) return AUTH_ROLES.GUEST;
+  if (token.includes("administrator") || token.includes("admin")) return AUTH_ROLES.ADMINISTRATOR;
+  if (token.includes("hod")) return AUTH_ROLES.HOD;
+  if (token.includes("research")) return AUTH_ROLES.RESEARCH;
+  try {
+    const parts = token.split(".");
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+      const userRole = payload.user_metadata?.role || payload.role;
+      if (userRole === "administrator") return AUTH_ROLES.ADMINISTRATOR;
+      if (userRole === "hod") return AUTH_ROLES.HOD;
+      if (userRole === "research") return AUTH_ROLES.RESEARCH;
+    }
+  } catch {
+    // Ignore parse error
+  }
+  return AUTH_ROLES.GUEST;
+}
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 8080);
@@ -78,10 +103,16 @@ function broadcastClientStatus(role, status, clientId) {
 
 function registerClient(socket, request) {
   const id = randomUUID();
+  const url = new URL(request.url, "ws://localhost");
+  const token = url.searchParams.get("token") || "";
+  const role = getRoleFromRequest(request.url);
+  const authRole = resolveAuthRole(token, role);
+
   const client = {
     id,
     socket,
-    role: getRoleFromRequest(request.url),
+    role,
+    authRole,
     connectedAt: new Date(),
     lastSeenAt: new Date(),
     alive: true,
@@ -92,6 +123,7 @@ function registerClient(socket, request) {
   log("info", "Client connected.", {
     clientId: id,
     role: client.role,
+    authRole: client.authRole,
     reactClients: countByRole(CLIENT_ROLES.REACT),
     unityClients: countByRole(CLIENT_ROLES.UNITY),
   });
@@ -106,6 +138,7 @@ function registerClient(socket, request) {
       status: "connected",
       clientId: id,
       role: client.role,
+      authRole: client.authRole,
     },
   });
 
@@ -156,15 +189,45 @@ function handleMessage(client, rawMessage) {
   if (parsed.message.type === MESSAGE_TYPES.CLIENT_HELLO) {
     const role = getRoleFromHello(parsed.message);
     if (role) client.role = role;
+    if (parsed.message.payload?.token) {
+      client.authRole = resolveAuthRole(parsed.message.payload.token, client.role);
+    }
     send(client, createAck(parsed.message.messageId, "registered"));
     broadcastClientStatus(client.role, "connected", client.id);
-    log("info", "Client registered role.", { clientId: client.id, role: client.role });
+    log("info", "Client registered role.", { clientId: client.id, role: client.role, authRole: client.authRole });
     return;
   }
 
   if (parsed.message.type === MESSAGE_TYPES.HEARTBEAT) {
     send(client, createAck(parsed.message.messageId, "heartbeat"));
     return;
+  }
+
+  // ENFORCE SERVER-SIDE AUTHORIZATION FOR MACHINE CONTROL
+  if (PROTECTED_CONTROL_MESSAGES.has(parsed.message.type)) {
+    const isAuthorized =
+      client.authRole === AUTH_ROLES.ADMINISTRATOR ||
+      client.authRole === AUTH_ROLES.HOD ||
+      client.role === CLIENT_ROLES.ESP32 ||
+      client.role === CLIENT_ROLES.UNITY;
+
+    if (!isAuthorized) {
+      log("warn", "Rejected unauthorized machine control command.", {
+        clientId: client.id,
+        role: client.role,
+        authRole: client.authRole,
+        type: parsed.message.type,
+      });
+      send(
+        client,
+        createError(
+          "FORBIDDEN",
+          "Unauthorized machine control. Physical commands require verified Administrator or HOD authorization.",
+          parsed.message.messageId
+        )
+      );
+      return;
+    }
   }
 
   const envelope = createEnvelope(parsed.message, client);
