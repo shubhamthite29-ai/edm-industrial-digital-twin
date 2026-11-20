@@ -109,7 +109,7 @@ export const LoginLandingPage: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  placeholder="name@ritindia.edu"
+                  placeholder="user@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="ml-2.5 w-full bg-transparent font-mono text-xs text-plant-text outline-none placeholder:text-plant-muted/60"
@@ -207,7 +207,7 @@ export const LoginLandingPage: React.FC = () => {
                   required
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="name@ritindia.edu"
+                  placeholder="user@gmail.com"
                   className="mt-1 h-10 w-full rounded border border-plant-line bg-plant-void px-3 text-xs text-plant-text outline-none focus:border-plant-cyan"
                 />
               </div>

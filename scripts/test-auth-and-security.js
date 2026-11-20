@@ -11,6 +11,7 @@ import {
 } from "../gateway/protocol.js";
 import { ROLE_PERMISSIONS, getRolePermissions } from "../src/types/auth.ts";
 import { PUBLISHED_DEMO_SAMPLES, PUBLISHED_PROJECT_METADATA } from "../src/data/guest/publishedDemoData.ts";
+import { resolveUserRole, normalizeAuthRole } from "../src/services/authService.ts";
 
 console.log("================================================================================");
 console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (14 TESTS)");
@@ -172,7 +173,11 @@ assert(loginLandingPageSource.includes("Email Address"), "Must provide Email Add
 assert(loginLandingPageSource.includes("Password"), "Must provide Password input");
 assert(loginLandingPageSource.includes(">Sign In<") || loginLandingPageSource.includes('"Sign In"'), "Must provide Sign In button");
 assert(loginLandingPageSource.includes("Forgot password?"), "Must provide Forgot password option");
-console.log("✓ Landing page is clean, minimal, has two inputs ('Email Address', 'Password') and 'Sign In' button.");
+
+// Must display @gmail.com placeholder instead of institutional @ritindia in email section
+assert(loginLandingPageSource.includes('placeholder="user@gmail.com"'), "Must display @gmail.com placeholder in email input");
+assert(!loginLandingPageSource.includes('name@ritindia.edu'), "Must not display @ritindia in email placeholder");
+console.log("✓ Landing page is clean, minimal, has two inputs ('Email Address', 'Password') with '@gmail.com' and 'Sign In' button.");
 
 // -----------------------------------------------------------------------------
 // Test 7: Toolhead Digital Twin Navigation & Guest Access
@@ -341,7 +346,27 @@ assert(authTypesSource.includes("canViewDigitalTwin: true"), "Permissions must g
 // Verify App.tsx allows both Administrator and HOD
 assert(appSource.includes('authRole === "guest" || authRole === "research"'), "Physical machine execution guard must only block guest and research");
 assert(!appSource.includes('authRole !== "administrator"') || appSource.includes('authRole !== "administrator" && authRole !== "hod"'), "No single-role administrator locks on twin features");
-console.log("✓ HOD full parity on Unity Digital Twin, toolhead motion, and physical controls verified.");
+
+// Verify LiveCommandPanel commands are enabled in simulation mode
+assert(appSource.includes('commandDisabled = dataMode === "live-unity" && connectionStatus !== "connected" && !unityWebGLReady'), "Simulation mode must allow machine command execution");
+
+// Verify responsive grid breakpoint for controls panel
+assert(appSource.includes('lg:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]'), "Grid must display controls beside Unity viewer on standard screens");
+
+// Verify resolveUserRole accurately resolves HOD across all sources
+assert.equal(resolveUserRole("hod", null, null, "user@example.com"), "hod", "Database role 'hod' must resolve to hod");
+assert.equal(resolveUserRole("HOD", null, null, "user@example.com"), "hod", "Case-insensitive 'HOD' must resolve to hod");
+assert.equal(resolveUserRole("Head of Department", null, null, "user@example.com"), "hod", "Alias 'Head of Department' must resolve to hod");
+assert.equal(resolveUserRole(null, "hod", null, "user@example.com"), "hod", "app_metadata 'hod' must resolve to hod");
+assert.equal(resolveUserRole(null, null, "hod", "user@example.com"), "hod", "user_metadata 'hod' must resolve to hod");
+assert.equal(resolveUserRole(null, null, null, "hod@gmail.com"), "hod", "Email hod@gmail.com must resolve to hod");
+assert.equal(resolveUserRole(null, null, null, "hod@ritindia.edu"), "hod", "Email hod@ritindia.edu must resolve to hod");
+assert.equal(resolveUserRole(null, null, null, "hod.mechatronics@gmail.com"), "hod", "Email hod.mechatronics@... must resolve to hod");
+assert.equal(resolveUserRole(null, null, null, "shirguppikar@gmail.com"), "hod", "Dr. Shirguppikar email must resolve to hod");
+assert.equal(resolveUserRole(null, null, null, "admin@gmail.com"), "administrator", "Email admin@gmail.com must resolve to administrator");
+assert.equal(resolveUserRole("research", null, null, "researcher@gmail.com"), "research", "Research user must resolve to research");
+
+console.log("✓ HOD full parity on Unity Digital Twin, role resolution across all sources, and control visibility verified.");
 
 console.log("\n================================================================================");
 console.log("ALL 14 AUTHENTICATION, SECURITY, WEB SERIAL & UI VALIDATION TESTS PASSED PERFECTLY!");

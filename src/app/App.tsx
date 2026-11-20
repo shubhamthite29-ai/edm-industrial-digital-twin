@@ -1313,7 +1313,7 @@ function LiveCommandPanel() {
   const telemetry = useTwinStore((state) => state.unityTelemetry);
   const cameraView = useTwinStore((state) => state.cameraView);
   const unityWebGLReady = useTwinStore((state) => state.unityWebGLReady);
-  const commandDisabled = dataMode !== "live-unity" || (connectionStatus !== "connected" && !unityWebGLReady);
+  const commandDisabled = dataMode === "live-unity" && connectionStatus !== "connected" && !unityWebGLReady;
 
   const commands = [
     ["Start", startLiveMachining, "green"],
@@ -2203,7 +2203,7 @@ function Dashboard({ active }: { active: string }) {
 
       {showTwin ? (
         <section aria-label="Digital Twin and machine control" className="space-y-4">
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
             <MachineView />
             {permissions.canControlPhysicalMachine ? (
               <div className="space-y-2">
