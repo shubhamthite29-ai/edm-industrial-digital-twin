@@ -41,6 +41,7 @@ export class RealtimeClient {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private manuallyClosed = false;
+  private status: ConnectionStatus = "disconnected";
   private messageHandlers = new Set<MessageHandler>();
   private statusHandlers = new Set<StatusHandler>();
   private diagnosticsHandlers = new Set<DiagnosticsHandler>();
@@ -52,12 +53,17 @@ export class RealtimeClient {
     latencyMs: null,
     lastMessages: [],
   };
-  private status: ConnectionStatus = "disconnected";
+  private reconnectAttempts = 0;
+  private readonly maxReconnectDelayMs = 30000;
 
   constructor(options: RealtimeClientOptions = {}) {
     this.url = options.url ?? import.meta.env.VITE_LIVE_WS_URL ?? (import.meta.env.DEV ? "ws://localhost:8080" : "");
     this.role = options.role ?? "react";
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
+  }
+
+  isConfigured() {
+    return Boolean(this.url);
   }
 
   getStatus() {
@@ -174,6 +180,7 @@ export class RealtimeClient {
 
   private handleOpen = () => {
     this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
     this.setStatus("connected");
     this.send({
       type: "client.hello",
@@ -198,7 +205,7 @@ export class RealtimeClient {
     this.socket = null;
     this.setStatus("disconnected");
 
-    if (!this.manuallyClosed) {
+    if (!this.manuallyClosed && this.url) {
       this.updateDiagnostics({
         reconnectCount: this.diagnostics.reconnectCount + 1,
         lastMessages: this.pushLog({
@@ -217,11 +224,14 @@ export class RealtimeClient {
   };
 
   private scheduleReconnect() {
-    if (this.manuallyClosed || this.reconnectTimer !== null) return;
+    if (this.manuallyClosed || this.reconnectTimer !== null || !this.url) return;
+    const factor = Math.min(this.reconnectAttempts, 6);
+    const delay = Math.min(this.reconnectDelayMs * Math.pow(1.5, factor), this.maxReconnectDelayMs);
+    this.reconnectAttempts++;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
-    }, this.reconnectDelayMs);
+    }, delay);
   }
 
   private clearReconnectTimer() {

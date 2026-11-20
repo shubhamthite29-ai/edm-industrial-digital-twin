@@ -148,41 +148,43 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
   const progress = telemetry.progressPercent || telemetry.cyclePercent || 0;
 
   return (
-    <div className="relative h-[420px] overflow-hidden rounded border border-plant-line bg-[#05070b] xl:h-[480px]">
+    <div className="relative h-[260px] sm:h-[340px] md:h-[420px] xl:h-[480px] overflow-hidden rounded border border-plant-line bg-[#05070b]">
       <canvas id="unity-canvas" ref={canvasRef} className="block h-full w-full bg-black outline-none" tabIndex={-1} />
 
       {loadState !== "ready" ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-plant-void/88 px-6 text-center">
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-plant-cyan">{loadState === "error" ? "Unity Load Error" : "Unity WebGL"}</div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-plant-void/88 px-4 text-center">
+          <div className="text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-plant-cyan">{loadState === "error" ? "Unity Load Error" : "Unity WebGL"}</div>
           <div className="mt-3 h-2 w-full max-w-sm overflow-hidden rounded bg-plant-line">
             <div className={`h-full ${loadState === "error" ? "bg-plant-red" : "bg-plant-cyan"}`} style={{ width: `${Math.round(loadProgress * 100)}%` }} />
           </div>
-          <div className="mt-3 max-w-md text-xs text-plant-muted">{message}</div>
+          <div className="mt-3 max-w-md text-[11px] sm:text-xs text-plant-muted">{message}</div>
         </div>
       ) : null}
 
-      <div className="pointer-events-none absolute left-3 top-3 rounded border border-plant-cyan/40 bg-plant-void/70 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-plant-cyan">
+      <div className="pointer-events-none absolute left-2 top-2 sm:left-3 sm:top-3 rounded border border-plant-cyan/40 bg-plant-void/70 px-2 py-0.5 sm:py-1 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.16em] text-plant-cyan">
         Unity WebGL renderer
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded border border-plant-line bg-plant-void/75 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-plant-muted">
+      <div className="pointer-events-none absolute bottom-2 right-2 sm:bottom-3 sm:right-3 max-w-[65vw] truncate rounded border border-plant-line bg-plant-void/75 px-2 py-0.5 sm:py-1 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.14em] text-plant-muted">
         {machineState} / {percentLabel(progress)} / {cameraView} / {connectionStatus}
       </div>
 
-      <div className="absolute right-3 top-3 flex gap-2">
+      <div className="absolute right-2 top-2 sm:right-3 sm:top-3 flex gap-1.5 sm:gap-2">
         <button
-          className="flex h-8 w-8 items-center justify-center rounded border border-plant-line bg-plant-void/75 text-plant-muted transition hover:text-plant-text"
+          className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded border border-plant-line bg-plant-void/85 text-plant-muted transition hover:text-plant-text active:scale-95"
           onClick={() => unityRef.current?.SetFullscreen(1)}
           title="Fullscreen"
           type="button"
+          aria-label="Toggle Fullscreen"
         >
           <Maximize2 size={15} />
         </button>
         <button
-          className="flex h-8 w-8 items-center justify-center rounded border border-plant-line bg-plant-void/75 text-plant-muted transition hover:text-plant-text"
+          className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded border border-plant-line bg-plant-void/85 text-plant-muted transition hover:text-plant-text active:scale-95"
           onClick={() => window.location.reload()}
           title="Reload Unity"
           type="button"
+          aria-label="Reload Unity WebGL"
         >
           <RotateCcw size={15} />
         </button>

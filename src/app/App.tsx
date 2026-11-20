@@ -13,6 +13,7 @@ import {
   Cpu,
   Download,
   Gauge,
+  Menu,
   MoveVertical,
   Pause,
   Play,
@@ -71,6 +72,7 @@ import {
   startLiveMachining,
   stopLiveMachining,
 } from "../services/liveUnityService";
+import { realtimeClient } from "../Realtime/RealtimeClient";
 import { machineParameterService } from "../Machine/MachineParameterService";
 import { initializeToolheadService } from "../services/toolheadService";
 import { useTwinStore } from "../store/useTwinStore";
@@ -116,15 +118,17 @@ function currentModule(pathname: string) {
 }
 
 function connectionTone(status: ConnectionStatus) {
+  if (!realtimeClient.isConfigured()) return "cyan";
   if (status === "connected") return "green";
   if (status === "connecting") return "amber";
   return "red";
 }
 
 function connectionLabel(status: ConnectionStatus) {
-  if (status === "connected") return "Connected";
+  if (!realtimeClient.isConfigured()) return "Physical Gateway Not Configured (Simulation Active)";
+  if (status === "connected") return "Gateway Connected";
   if (status === "connecting") return "Connecting...";
-  return "Disconnected";
+  return "Gateway Disconnected";
 }
 
 function secondsLabel(value: number) {
@@ -134,7 +138,7 @@ function secondsLabel(value: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function ShellHeader() {
+function ShellHeader({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMenu: () => void }) {
   const running = useTwinStore((state) => state.running);
   const setRunning = useTwinStore((state) => state.setRunning);
   const dataMode = useTwinStore((state) => state.dataMode);
@@ -170,28 +174,45 @@ function ShellHeader() {
   };
 
   return (
-    <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-plant-line bg-plant-deck/95 px-5">
-      <div>
-        <div className="text-lg font-bold uppercase tracking-[0.24em] text-plant-cyan">EDM Industrial Digital Twin</div>
-        <div className="text-[11px] uppercase tracking-[0.2em] text-plant-muted">
-          Physics model + sensor fusion + AI decision support
+    <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-plant-line bg-plant-deck/95 px-3 py-2 sm:px-5">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <button
+          type="button"
+          onClick={onToggleMenu}
+          className="flex h-10 w-10 items-center justify-center rounded border border-plant-line bg-plant-void text-plant-muted transition hover:border-plant-cyan/60 hover:text-plant-cyan md:hidden"
+          aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+        >
+          {menuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+
+        <div>
+          <div className="text-sm font-bold uppercase tracking-[0.16em] text-plant-cyan sm:text-base sm:tracking-[0.24em] md:text-lg">
+            EDM Industrial Digital Twin
+          </div>
+          <div className="text-[9px] uppercase tracking-[0.14em] text-plant-muted sm:text-[11px] sm:tracking-[0.2em]">
+            Physics model + sensor fusion + AI decision support
+          </div>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <StatusPill label={machineStatus} tone={machineStatus === "Machining" ? "green" : "red"} />
-        <StatusPill label={connectionLabel(connectionStatus)} tone={connectionTone(connectionStatus)} />
+        <StatusPill
+          label={connectionLabel(connectionStatus)}
+          tone={connectionTone(connectionStatus)}
+        />
         {dataMode === "live-unity" ? <StatusPill label={unityWebGLReady ? "Unity WebGL Ready" : "Unity WebGL Loading"} tone={unityWebGLReady ? "green" : "amber"} /> : null}
         <StatusPill label={`${fmt(metrics.twinAccuracy, 0)}% Twin Sync`} tone="cyan" />
         <StatusPill label={`${alarms.length} Alarms`} tone={alarms.some((alarm) => alarm.level === "CRITICAL") ? "red" : alarms.length ? "amber" : "green"} />
-        <div className="inline-flex h-9 overflow-hidden rounded border border-plant-line bg-plant-void">
+        <div className="inline-flex h-9 overflow-x-auto rounded border border-plant-line bg-plant-void">
           {[
-            ["simulation", "Simulation Mode"],
-            ["live-unity", "Live Unity Mode"],
-            ["dataset", "Dataset Mode"],
+            ["simulation", "Simulation"],
+            ["live-unity", "Live Unity"],
+            ["dataset", "Dataset"],
           ].map(([mode, label]) => (
             <button
               key={mode}
-              className={`px-3 text-xs font-semibold uppercase tracking-wide transition ${
+              className={`px-2.5 sm:px-3 text-xs font-semibold uppercase tracking-wide transition ${
                 dataMode === mode ? "bg-plant-cyan text-plant-void" : "text-plant-muted hover:text-plant-text"
               }`}
               onClick={() => setDataMode(mode as DataMode)}
@@ -212,7 +233,7 @@ function ShellHeader() {
           ))}
         </select>
         <button
-          className={`inline-flex h-9 items-center gap-2 rounded px-3 text-xs font-semibold uppercase tracking-wide ${
+          className={`inline-flex h-9 items-center gap-1.5 sm:gap-2 rounded px-3 text-xs font-semibold uppercase tracking-wide ${
             runActive ? "bg-plant-red text-white" : "bg-plant-green text-plant-void"
           }`}
           disabled={liveModeDisconnected}
@@ -227,9 +248,63 @@ function ShellHeader() {
   );
 }
 
+function MobileNavDrawer({ active, onClose }: { active: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex md:hidden">
+      <div
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative flex w-4/5 max-w-xs flex-col border-r border-plant-line bg-plant-deck p-5 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-plant-line pb-4">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-plant-cyan">Navigation</div>
+            <div className="text-[10px] uppercase tracking-wider text-plant-muted">CELL-EDM-04</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded border border-plant-line text-plant-muted hover:text-plant-text"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <nav className="mt-4 flex flex-1 flex-col gap-1.5 overflow-y-auto">
+          {modules.map((item) => {
+            const Icon = item.icon;
+            const selected = item.key === active;
+            return (
+              <Link
+                key={item.key}
+                to={`/${item.key === "dashboard" ? "" : item.key}`}
+                onClick={onClose}
+                className={`flex min-h-[44px] items-center gap-3 rounded-lg border px-3.5 py-2.5 text-xs font-bold uppercase tracking-wider transition ${
+                  selected
+                    ? "border-plant-cyan/70 bg-plant-cyan/15 text-plant-cyan shadow-sm"
+                    : "border-transparent text-plant-muted hover:border-plant-line hover:bg-plant-panel hover:text-plant-text"
+                }`}
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto border-t border-plant-line pt-4 text-[10px] uppercase text-plant-muted">
+          EDM Industrial Digital Twin v2.5.0
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({ active }: { active: string }) {
   return (
-    <nav aria-label="Dashboard navigation" className="sticky top-2 z-40 mx-4 mt-3 overflow-x-auto rounded border border-plant-line bg-plant-deck/95 p-2 shadow-glow backdrop-blur">
+    <nav aria-label="Dashboard navigation" className="sticky top-2 z-40 mx-4 mt-3 hidden md:block overflow-x-auto rounded border border-plant-line bg-plant-deck/95 p-2 shadow-glow backdrop-blur">
       <div className="flex min-w-max items-center gap-1">
         <div className="hidden border-r border-plant-line px-3 py-1.5 xl:block">
           <div className="text-[9px] uppercase tracking-[0.2em] text-plant-muted">EDM Cell</div>
@@ -262,7 +337,7 @@ function LiveMetrics() {
   const parameters = useTwinStore((state) => state.parameters);
   const metrics = useTwinStore((state) => state.metrics);
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
       <MetricCard label="Current" value={fmt(parameters.current, 1)} unit="A" tone="amber" sublabel="A2 discharge sensor" />
       <MetricCard label="Gap Voltage" value={fmt(parameters.gapVoltage, 0)} unit="V" tone="cyan" sublabel={metrics.gapState} />
       <MetricCard label="MRR" value={fmt(metrics.mrr, 2)} unit="mm3/min" tone="green" sublabel="Physics prediction" />
@@ -1974,6 +2049,7 @@ export default function App() {
   const location = useLocation();
   const active = currentModule(location.pathname);
   const tick = useTwinStore((state) => state.tick);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     initializeLiveUnityService();
@@ -1983,11 +2059,12 @@ export default function App() {
   useInterval(tick, 1000);
 
   return (
-    <div className="min-h-screen bg-plant-void text-plant-text">
+    <div className="min-h-screen bg-plant-void text-plant-text overflow-x-hidden">
       <NotificationStack />
+      {mobileMenuOpen ? <MobileNavDrawer active={active} onClose={() => setMobileMenuOpen(false)} /> : null}
       <div className="min-h-screen">
         <div className="min-w-0">
-          <ShellHeader />
+          <ShellHeader menuOpen={mobileMenuOpen} onToggleMenu={() => setMobileMenuOpen((open) => !open)} />
           <Sidebar active={active} />
           <Dashboard active={active} />
           <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-plant-line px-4 py-3 text-[11px] uppercase tracking-wide text-plant-muted">

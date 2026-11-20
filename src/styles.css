@@ -14,10 +14,13 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
   min-width: 320px;
+  max-width: 100vw;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     linear-gradient(135deg, rgba(40, 215, 255, 0.06), transparent 28%),
     linear-gradient(225deg, rgba(244, 178, 77, 0.05), transparent 22%),
@@ -332,20 +335,35 @@ button {
 @media (max-width: 720px) {
   .toolhead-status-strip { grid-template-columns: 1fr; }
   .toolhead-status-strip > div + div { border-top: 1px solid var(--th-line); border-left: 0; }
-  .toolhead-viewport { height: 440px; }
+  .toolhead-viewport { height: clamp(280px, 48vh, 420px); }
   .toolhead-viewport-header { gap: 10px; }
   .toolhead-travel-scale { display: none; }
   .toolhead-telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toolhead-motion-button,
+  .toolhead-stop-button,
+  .toolhead-preset-buttons button {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 460px) {
   .toolhead-workbench .toolhead-shell > header { padding-right: 11px; padding-left: 11px; }
   .toolhead-workbench .toolhead-shell > div { padding: 11px; }
   .toolhead-theme-toggle span { display: none; }
-  .toolhead-theme-toggle { width: 32px; justify-content: center; padding: 0; }
+  .toolhead-theme-toggle { width: 36px; min-height: 36px; justify-content: center; padding: 0; }
   .toolhead-viewport-header { right: 10px; }
   .toolhead-viewport-header > div:first-child { overflow: hidden; max-width: 156px; }
   .toolhead-viewport-header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .toolhead-telemetry-grid { grid-template-columns: 1fr; }
   .toolhead-footnote { flex-wrap: wrap; }
+  .toolhead-motion-buttons,
+  .toolhead-preset-buttons {
+    gap: 5px;
+  }
+  .toolhead-motion-button,
+  .toolhead-stop-button,
+  .toolhead-preset-buttons button {
+    min-height: 44px;
+    font-size: 10px;
+  }
 }

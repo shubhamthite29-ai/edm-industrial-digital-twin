@@ -48,18 +48,18 @@ const TOOLHEAD_MOUNT_QUATERNION = new Quaternion(-0.4907929003238678, 0.50904065
 // Its 100 mm canonical endpoint is clamped to retain a 10 mm browser-side
 // clearance above the base's -0.12651 m CAD extent. This never represents a
 // physical servo calibration.
-const TOP_MOVING_ASSEMBLY_X_METERS = 0;
-const LOWER_SAFE_MOVING_ASSEMBLY_X_METERS = -0.0555;
-function positionToAssemblyX(positionMm: number, minPositionMm: number) {
-  // True 1:1 mapping of physical millimeters to CAD meters (1 mm = 0.001 m).
-  const physicalOffsetMeters = (positionMm - minPositionMm) / 1000.0;
-  // Clamp visually to prevent the toolhead from clipping through the CAD base.
-  return Math.max(LOWER_SAFE_MOVING_ASSEMBLY_X_METERS, TOP_MOVING_ASSEMBLY_X_METERS - physicalOffsetMeters);
-}
-
 function positionProgress(positionMm: number, minPositionMm: number, maxPositionMm: number) {
   const span = Math.max(0.001, maxPositionMm - minPositionMm);
   return Math.min(1, Math.max(0, (positionMm - minPositionMm) / span));
+}
+
+// Map calibrated position (0-100 mm default) linearly across CAD safe travel
+// range (0 to -0.0555 m). 0 mm is top, 50 mm is exactly 50% travel, 100 mm is full safe stroke.
+const TOP_MOVING_ASSEMBLY_X_METERS = 0;
+const LOWER_SAFE_MOVING_ASSEMBLY_X_METERS = -0.0555;
+function positionToAssemblyX(positionMm: number, minPositionMm: number, maxPositionMm: number) {
+  const progress = positionProgress(positionMm, minPositionMm, maxPositionMm);
+  return TOP_MOVING_ASSEMBLY_X_METERS + progress * (LOWER_SAFE_MOVING_ASSEMBLY_X_METERS - TOP_MOVING_ASSEMBLY_X_METERS);
 }
 
 function initialAssetStatus() {
@@ -129,10 +129,11 @@ function ToolheadPart({ asset, onLoaded }: { asset: ToolheadPartAsset; onLoaded:
   );
 }
 
-function MovingAssembly({ assets, positionMm, minPositionMm, motion, onLoaded, onFailure }: {
+function MovingAssembly({ assets, positionMm, minPositionMm, maxPositionMm, motion, onLoaded, onFailure }: {
   assets: ToolheadPartAsset[];
   positionMm: number;
   minPositionMm: number;
+  maxPositionMm: number;
   motion: "MOVING" | "STOPPED" | "ERROR";
   onLoaded: (key: ToolheadPartKey) => void;
   onFailure: (key: ToolheadPartKey) => void;
@@ -151,12 +152,12 @@ function MovingAssembly({ assets, positionMm, minPositionMm, motion, onLoaded, o
   useFrame((_state, delta) => {
     renderedMm.current += (currentMm.current - renderedMm.current) * Math.min(1, delta * 14);
     if (movingRef.current) {
-      movingRef.current.position.x = positionToAssemblyX(renderedMm.current, minPositionMm);
+      movingRef.current.position.x = positionToAssemblyX(renderedMm.current, minPositionMm, maxPositionMm);
     }
   });
 
   return (
-    <group ref={movingRef} name="MOVING_ASSEMBLY" position={[positionToAssemblyX(positionMm, minPositionMm), 0, 0]}>
+    <group ref={movingRef} name="MOVING_ASSEMBLY" position={[positionToAssemblyX(positionMm, minPositionMm, maxPositionMm), 0, 0]}>
       <group name="PUSHER_GROUP">
         {pusher ? <ToolheadPartErrorBoundary asset={pusher} onFailure={onFailure}>
           <Suspense fallback={null}>
@@ -202,11 +203,12 @@ function CameraFramer({ assemblyRef, assemblyReady }: { assemblyRef: React.RefOb
   return <OrbitControls enablePan minDistance={0.12} maxDistance={3} target={target} />;
 }
 
-function ToolheadAssembly({ assets, resolvedPartCount, positionMm, minPositionMm, motion, onLoaded, onFailure }: {
+function ToolheadAssembly({ assets, resolvedPartCount, positionMm, minPositionMm, maxPositionMm, motion, onLoaded, onFailure }: {
   assets: ToolheadPartAsset[];
   resolvedPartCount: number;
   positionMm: number;
   minPositionMm: number;
+  maxPositionMm: number;
   motion: "MOVING" | "STOPPED" | "ERROR";
   onLoaded: (key: ToolheadPartKey) => void;
   onFailure: (key: ToolheadPartKey) => void;
@@ -228,18 +230,19 @@ function ToolheadAssembly({ assets, resolvedPartCount, positionMm, minPositionMm
             </ToolheadPartErrorBoundary>
           ))}
         </group>
-        <MovingAssembly assets={movingAssets} positionMm={positionMm} minPositionMm={minPositionMm} motion={motion} onLoaded={onLoaded} onFailure={onFailure} />
+        <MovingAssembly assets={movingAssets} positionMm={positionMm} minPositionMm={minPositionMm} maxPositionMm={maxPositionMm} motion={motion} onLoaded={onLoaded} onFailure={onFailure} />
       </group>
       <CameraFramer assemblyRef={assemblyRef} assemblyReady={assemblyReady} />
     </>
   );
 }
 
-function ToolheadScene({ assets, resolvedPartCount, positionMm, minPositionMm, motion, onLoaded, onFailure }: {
+function ToolheadScene({ assets, resolvedPartCount, positionMm, minPositionMm, maxPositionMm, motion, onLoaded, onFailure }: {
   assets: ToolheadPartAsset[];
   resolvedPartCount: number;
   positionMm: number;
   minPositionMm: number;
+  maxPositionMm: number;
   motion: "MOVING" | "STOPPED" | "ERROR";
   onLoaded: (key: ToolheadPartKey) => void;
   onFailure: (key: ToolheadPartKey) => void;
@@ -252,7 +255,7 @@ function ToolheadScene({ assets, resolvedPartCount, positionMm, minPositionMm, m
       <pointLight position={[-0.35, 0.2, 0.35]} intensity={1.8} color="#28d7ff" distance={2.5} />
       <pointLight position={[0.2, -0.15, -0.3]} intensity={1.2} color="#f4b24d" distance={1.6} />
       <gridHelper args={[0.9, 18, "#273244", "#17202d"]} position={[0, -0.19, 0]} />
-      <ToolheadAssembly assets={assets} resolvedPartCount={resolvedPartCount} positionMm={positionMm} minPositionMm={minPositionMm} motion={motion} onLoaded={onLoaded} onFailure={onFailure} />
+      <ToolheadAssembly assets={assets} resolvedPartCount={resolvedPartCount} positionMm={positionMm} minPositionMm={minPositionMm} maxPositionMm={maxPositionMm} motion={motion} onLoaded={onLoaded} onFailure={onFailure} />
     </Canvas>
   );
 }
@@ -355,7 +358,7 @@ export function ToolheadDigitalTwin() {
       </div>
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="toolhead-viewport">
-          <ToolheadScene assets={loadableAssets} resolvedPartCount={resolvedPartCount} positionMm={positionMm} minPositionMm={calibration.minPositionMm} motion={motion} onLoaded={handleLoaded} onFailure={handleFailure} />
+          <ToolheadScene assets={loadableAssets} resolvedPartCount={resolvedPartCount} positionMm={positionMm} minPositionMm={calibration.minPositionMm} maxPositionMm={calibration.maxPositionMm} motion={motion} onLoaded={handleLoaded} onFailure={handleFailure} />
           <div className="toolhead-viewport-header">
             <div><span>Toolhead view</span><strong>{mode === "physical" ? "Physical digital twin" : "Simulation digital twin"}</strong></div>
             <div><span>Motion</span><strong>{motion}</strong></div>
