@@ -115,7 +115,16 @@ export function ParameterStepper({ id, label, unit, min, max, step, decimals = 2
           value={draft}
           onBlur={commitDraft}
           onChange={(event) => updateFromDraft(event.target.value)}
-          onFocus={() => setFocused(true)}
+          onFocus={(event) => {
+            setFocused(true);
+            event.target.select();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
         />
         <button
           type="button"
@@ -125,6 +134,22 @@ export function ParameterStepper({ id, label, unit, min, max, step, decimals = 2
         >
           <ChevronUp size={16} />
         </button>
+      </div>
+      <div className="col-span-full mt-1">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={clamp(Number.isFinite(numericValue) ? numericValue : min, min, max)}
+          onChange={(e) => {
+            const nextVal = roundToDecimals(Number(e.target.value), displayDecimals);
+            updatePendingParameter(id, nextVal as MachineParameters[typeof id]);
+            setDraft(formatNumber(nextVal, displayDecimals));
+          }}
+          className="h-1.5 w-full cursor-pointer appearance-none rounded bg-plant-line accent-plant-cyan"
+          aria-label={`${label} slider control`}
+        />
       </div>
     </div>
   );

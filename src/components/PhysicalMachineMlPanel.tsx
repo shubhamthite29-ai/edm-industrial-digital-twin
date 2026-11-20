@@ -104,10 +104,10 @@ export const PhysicalMachineMlPanel: React.FC<PhysicalMachineMlPanelProps> = ({ 
     }
     setValidationError("");
     const res = predictPhysicalMl({
-      current_A: Math.round(ip),
-      voltage_V: Math.round(vg),
-      ton_us: Math.round(ton),
-      toff_us: Math.round(toff),
+      current_A: Number(ip),
+      voltage_V: Number(vg),
+      ton_us: Number(ton),
+      toff_us: Number(toff),
     });
     setPrediction(res);
   };
@@ -612,12 +612,15 @@ export const PhysicalMachineMlPanel: React.FC<PhysicalMachineMlPanelProps> = ({ 
                 <label className="text-[10px] uppercase text-plant-muted">Measured Actual MRR</label>
                 <div className="mt-1 flex items-center gap-1">
                   <input
-                    type="number"
-                    step="0.0001"
-                    className="h-8 w-full rounded border border-plant-line bg-plant-void px-2 font-mono text-xs text-plant-text outline-none focus:border-plant-cyan"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="h-9 sm:h-10 w-full rounded border border-plant-line bg-plant-void px-2.5 font-mono text-xs sm:text-sm text-plant-text outline-none focus:border-plant-cyan"
                     value={actualMrrInput}
-                    onChange={(e) => setActualMrrInput(e.target.value)}
+                    onChange={(e) => setActualMrrInput(e.target.value.replace(",", "."))}
+                    onFocus={(e) => e.target.select()}
                     placeholder="e.g. 0.0359"
+                    aria-label="Measured Actual MRR in g/min"
                   />
                   <span className="text-[10px] text-plant-muted">g/min</span>
                 </div>
@@ -626,12 +629,15 @@ export const PhysicalMachineMlPanel: React.FC<PhysicalMachineMlPanelProps> = ({ 
                 <label className="text-[10px] uppercase text-plant-muted">Measured Actual TWR</label>
                 <div className="mt-1 flex items-center gap-1">
                   <input
-                    type="number"
-                    step="0.0001"
-                    className="h-8 w-full rounded border border-plant-line bg-plant-void px-2 font-mono text-xs text-plant-text outline-none focus:border-plant-cyan"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="h-9 sm:h-10 w-full rounded border border-plant-line bg-plant-void px-2.5 font-mono text-xs sm:text-sm text-plant-text outline-none focus:border-plant-cyan"
                     value={actualTwrInput}
-                    onChange={(e) => setActualTwrInput(e.target.value)}
+                    onChange={(e) => setActualTwrInput(e.target.value.replace(",", "."))}
+                    onFocus={(e) => e.target.select()}
                     placeholder="e.g. 0.0218"
+                    aria-label="Measured Actual TWR in g/min"
                   />
                   <span className="text-[10px] text-plant-muted">g/min</span>
                 </div>

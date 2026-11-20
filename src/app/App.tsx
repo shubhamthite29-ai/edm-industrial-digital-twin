@@ -76,7 +76,7 @@ import { realtimeClient } from "../Realtime/RealtimeClient";
 import { machineParameterService } from "../Machine/MachineParameterService";
 import { initializeToolheadService } from "../services/toolheadService";
 import { useTwinStore } from "../store/useTwinStore";
-import type { CameraView, ConnectionStatus, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
+import type { CameraView, ConnectionStatus, DashboardNotification, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
 
 const modules = [
   { key: "dashboard", label: "Overview", icon: Gauge },
@@ -505,6 +505,10 @@ function parseMlDraft(value: string, integerOnly = false) {
   return mlCompleteDecimalPattern.test(value) ? Number(value) : undefined;
 }
 
+function clamp(val: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, val));
+}
+
 function MlNumberInput({ label, value, unit, onChange, onEnter, min, max, step = 0.001, readOnly = false, integerOnly = false }: { label: string; value: number; unit: string; onChange: (value: number) => void; onEnter?: () => void; min?: number; max?: number; step?: number; readOnly?: boolean; integerOnly?: boolean }) {
   const [draft, setDraft] = useState(() => formatMlNumber(value, integerOnly));
   const [focused, setFocused] = useState(false);
@@ -540,12 +544,10 @@ function MlNumberInput({ label, value, unit, onChange, onEnter, min, max, step =
 
     setDraft(normalized);
     setHasUncommittedDraft(true);
-    let parsed = parseMlDraft(normalized, integerOnly);
-    if (parsed !== undefined && max !== undefined && parsed > max) {
-      parsed = max;
-      setDraft(formatMlNumber(max, integerOnly));
+    const parsed = parseMlDraft(normalized, integerOnly);
+    if (parsed !== undefined && Number.isFinite(parsed)) {
+      onChange(parsed);
     }
-    onChange(parsed ?? Number.NaN);
   };
 
   const stepValue = (direction: 1 | -1) => {
@@ -560,22 +562,27 @@ function MlNumberInput({ label, value, unit, onChange, onEnter, min, max, step =
 
   return (
     <div className="block rounded border border-plant-line bg-plant-void p-3">
-      <span className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">{label}</span>
-      <span className="mt-2 flex items-center gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">{label}</span>
+        {min !== undefined && max !== undefined ? (
+          <span className="font-mono text-[10px] text-plant-muted">{min} - {max} {unit}</span>
+        ) : null}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
         <span className="flex min-w-0 flex-1 overflow-hidden rounded border border-plant-line bg-plant-deck focus-within:border-plant-cyan">
           <input
-            className="relative z-10 h-9 min-w-0 flex-1 cursor-text bg-transparent px-2 font-mono text-sm text-plant-text outline-none disabled:cursor-default disabled:text-plant-muted"
+            className="relative z-10 h-10 min-w-0 flex-1 cursor-text bg-transparent px-2.5 font-mono text-sm text-plant-text outline-none disabled:cursor-default disabled:text-plant-muted"
             inputMode={integerOnly ? "numeric" : "decimal"}
-            type={integerOnly ? "number" : "text"}
+            type="text"
             autoComplete="off"
             aria-label={`${label} (${unit})`}
             value={draft}
-            min={min}
-            max={max}
-            step={step}
             readOnly={readOnly}
             onBlur={commit}
-            onFocus={() => setFocused(true)}
+            onFocus={(event) => {
+              setFocused(true);
+              event.target.select();
+            }}
             onChange={(event) => updateDraft(event.target.value)}
             onKeyDown={(event) => {
               if (readOnly) return;
@@ -606,14 +613,58 @@ function MlNumberInput({ label, value, unit, onChange, onEnter, min, max, step =
               }
             }}
           />
-          {!readOnly ? <span className="flex w-7 shrink-0 flex-col border-l border-plant-line">
-            <button aria-label={`Increase ${label}`} className="flex h-[18px] items-center justify-center text-plant-cyan hover:bg-plant-cyan/10 disabled:opacity-30" disabled={parsedDraft !== undefined && max !== undefined && parsedDraft >= max} onMouseDown={(event) => event.preventDefault()} onClick={() => stepValue(1)} type="button"><ChevronUp size={13} /></button>
-            <button aria-label={`Decrease ${label}`} className="flex h-[18px] items-center justify-center border-t border-plant-line text-plant-cyan hover:bg-plant-cyan/10 disabled:opacity-30" disabled={parsedDraft !== undefined && min !== undefined && parsedDraft <= min} onMouseDown={(event) => event.preventDefault()} onClick={() => stepValue(-1)} type="button"><ChevronDown size={13} /></button>
-          </span> : null}
+          {!readOnly ? (
+            <span className="flex w-7 shrink-0 flex-col border-l border-plant-line">
+              <button
+                aria-label={`Increase ${label}`}
+                className="flex h-[19px] items-center justify-center text-plant-cyan hover:bg-plant-cyan/10 disabled:opacity-30"
+                disabled={parsedDraft !== undefined && max !== undefined && parsedDraft >= max}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => stepValue(1)}
+                type="button"
+              >
+                <ChevronUp size={13} />
+              </button>
+              <button
+                aria-label={`Decrease ${label}`}
+                className="flex h-[19px] items-center justify-center border-t border-plant-line text-plant-cyan hover:bg-plant-cyan/10 disabled:opacity-30"
+                disabled={parsedDraft !== undefined && min !== undefined && parsedDraft <= min}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => stepValue(-1)}
+                type="button"
+              >
+                <ChevronDown size={13} />
+              </button>
+            </span>
+          ) : null}
         </span>
-        <span className="text-xs text-plant-muted">{unit}</span>
-      </span>
-      {min !== undefined && max !== undefined ? <span className={`mt-2 block text-[10px] ${hasRangeWarning ? "text-plant-amber" : "text-plant-muted"}`}>{hasRangeWarning ? "Outside verified training range - prediction may be unreliable." : `Verified range: ${min} to ${max} ${unit}`}</span> : null}
+        <span className="text-xs font-semibold text-plant-muted">{unit}</span>
+      </div>
+      {min !== undefined && max !== undefined && !readOnly ? (
+        <div className="mt-2.5 flex items-center gap-2">
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={integerOnly ? 1 : step}
+            value={Number.isFinite(parsedDraft) ? clamp(parsedDraft!, min, max) : clamp(value, min, max)}
+            onChange={(event) => {
+              const numeric = Number(event.target.value);
+              const rounded = integerOnly ? Math.round(numeric) : Number(numeric.toFixed(3));
+              setDraft(formatMlNumber(rounded, integerOnly));
+              setHasUncommittedDraft(false);
+              onChange(rounded);
+            }}
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-plant-line accent-plant-cyan"
+            aria-label={`${label} slider`}
+          />
+        </div>
+      ) : null}
+      {min !== undefined && max !== undefined ? (
+        <span className={`mt-1.5 block text-[10px] ${hasRangeWarning ? "text-plant-amber font-medium" : "text-plant-muted"}`}>
+          {hasRangeWarning ? "Outside verified training range - prediction may be unreliable." : `Verified range: ${min} to ${max} ${unit}`}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -1941,6 +1992,75 @@ function EventLogPanel() {
   );
 }
 
+function NotificationToast({
+  notification,
+  onDismiss,
+}: {
+  notification: DashboardNotification;
+  onDismiss: (id: string) => void;
+}) {
+  const [isExiting, setIsExiting] = useState(false);
+
+  useEffect(() => {
+    // Only auto-dismiss operational confirmations (INFO level) after 2.5 seconds (2500 ms)
+    // Critical errors, safety warnings, and emergency-stop conditions remain persistent
+    const isAutoDismiss = notification.level === "INFO";
+    if (!isAutoDismiss) return;
+
+    const timer = setTimeout(() => {
+      setIsExiting(true);
+      const exitTimer = setTimeout(() => {
+        onDismiss(notification.id);
+      }, 250);
+      return () => clearTimeout(exitTimer);
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [notification.id, notification.level, onDismiss]);
+
+  const handleManualDismiss = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onDismiss(notification.id);
+    }, 150);
+  };
+
+  const isCritical = notification.level === "EMERGENCY" || notification.level === "CRITICAL";
+  const isWarning = notification.level === "WARNING";
+
+  return (
+    <div
+      className={`pointer-events-auto flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 shadow-lg backdrop-blur-md transition-all duration-250 ease-out ${
+        isExiting ? "opacity-0 translate-x-4 scale-95" : "opacity-100 translate-x-0 scale-100"
+      } ${
+        isCritical
+          ? "border-plant-red bg-plant-red/25 text-plant-red shadow-[0_0_15px_rgba(239,68,68,0.25)]"
+          : isWarning
+            ? "border-plant-amber bg-plant-amber/25 text-plant-amber shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+            : "border-plant-cyan/60 bg-plant-panel/95 text-plant-cyan shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+      }`}
+      role="alert"
+    >
+      <div className="flex items-center gap-2 overflow-hidden">
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${
+            isCritical ? "bg-plant-red animate-pulse" : isWarning ? "bg-plant-amber" : "bg-plant-cyan"
+          }`}
+        />
+        <div className="truncate text-xs font-semibold uppercase tracking-wider">{notification.message}</div>
+      </div>
+      <button
+        className="shrink-0 rounded p-1 text-plant-muted transition-colors hover:bg-white/10 hover:text-plant-text focus:outline-none"
+        onClick={handleManualDismiss}
+        type="button"
+        aria-label="Dismiss notification"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 function NotificationStack() {
   const notifications = useTwinStore((state) => state.notifications);
   const dismissNotification = useTwinStore((state) => state.dismissNotification);
@@ -1948,25 +2068,16 @@ function NotificationStack() {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="fixed right-4 top-20 z-50 w-[min(360px,calc(100vw-2rem))] space-y-2">
+    <div
+      className="pointer-events-none fixed top-16 right-3 sm:top-20 sm:right-5 z-50 flex w-[min(340px,calc(100vw-1.5rem))] flex-col gap-2"
+      aria-live="polite"
+    >
       {notifications.map((notification) => (
-        <div
+        <NotificationToast
           key={notification.id}
-          className={`rounded border px-3 py-2 shadow-glow ${
-            notification.level === "EMERGENCY" || notification.level === "CRITICAL"
-              ? "border-plant-red bg-plant-red/20 text-plant-red"
-              : notification.level === "WARNING"
-                ? "border-plant-amber bg-plant-amber/20 text-plant-amber"
-                : "border-plant-cyan bg-plant-panel text-plant-cyan"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold uppercase tracking-wide">{notification.message}</div>
-            <button className="text-plant-muted hover:text-plant-text" onClick={() => dismissNotification(notification.id)} type="button" aria-label="Dismiss notification">
-              <X size={15} />
-            </button>
-          </div>
-        </div>
+          notification={notification}
+          onDismiss={dismissNotification}
+        />
       ))}
     </div>
   );
