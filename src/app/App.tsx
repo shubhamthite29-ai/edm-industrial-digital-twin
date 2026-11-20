@@ -1,26 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Activity,
   AlertTriangle,
   BarChart3,
+  BookOpen,
   Bot,
   Boxes,
   BrainCircuit,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Cpu,
-  Database,
   Download,
-  FileText,
   Gauge,
-  Microscope,
+  MoveVertical,
   Pause,
   Play,
-  RadioTower,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
-  Wrench,
   X,
 } from "lucide-react";
 import {
@@ -40,11 +38,26 @@ import { ParameterStepper } from "../components/ParameterStepper";
 import { SensorDiagram } from "../components/SensorDiagram";
 import { StatusPill } from "../components/StatusPill";
 import { UnityWebGLViewer } from "../components/UnityWebGLViewer";
+import { ToolheadDigitalTwin } from "../components/ToolheadDigitalTwin";
+import { PhysicalMachineMlPanel } from "../components/PhysicalMachineMlPanel";
 import { sensors, sensorGroups } from "../data/sensors";
 import { useInterval } from "../hooks/useInterval";
 import { compareWhatIf } from "../services/edmCalculations";
 import { parseCsvDataset } from "../services/csvDatasetService";
 import { analyzeDatasetOptimization, optimizationObjectives, type OptimizationObjective, type RankedExperimentalCondition } from "../services/edmOptimizationService";
+import {
+  getMlHealth,
+  getMlElectrodes,
+  getMlInputRanges,
+  getMlMaterials,
+  getMlModelInfo,
+  getMlSources,
+  predictMl,
+  type MlMaterialTableEntry,
+  type MlModelInfo,
+  type MlPredictionResult,
+  type MlSourceInfo,
+} from "../services/mlApiService";
 import {
   emergencyStopLiveMachine,
   homeLiveMachine,
@@ -59,25 +72,30 @@ import {
   stopLiveMachining,
 } from "../services/liveUnityService";
 import { machineParameterService } from "../Machine/MachineParameterService";
+import { initializeToolheadService } from "../services/toolheadService";
 import { useTwinStore } from "../store/useTwinStore";
 import type { CameraView, ConnectionStatus, DataMode, MachineMode, MachineParameters, UserRole } from "../types/twin";
 
 const modules = [
-  { key: "dashboard", label: "Dashboard", icon: Gauge },
-  { key: "live-machine", label: "Live Machine", icon: RadioTower },
+  { key: "dashboard", label: "Overview", icon: Gauge },
   { key: "digital-twin", label: "Digital Twin", icon: Boxes },
+  { key: "toolhead", label: "Toolhead Digital Twin", icon: MoveVertical },
   { key: "machine-control", label: "Machine Control", icon: SlidersHorizontal },
-  { key: "simulation", label: "Simulation", icon: Activity },
-  { key: "ai-copilot", label: "AI Copilot", icon: Bot },
-  { key: "engineering", label: "Engineering", icon: Cpu },
-  { key: "predictions", label: "Predictions", icon: BrainCircuit },
-  { key: "analytics", label: "Analytics", icon: BarChart3 },
-  { key: "maintenance", label: "Maintenance", icon: Wrench },
-  { key: "alarm-center", label: "Alarm Center", icon: AlertTriangle },
-  { key: "reports", label: "Reports", icon: FileText },
-  { key: "settings", label: "Settings", icon: Settings },
-  { key: "research-mode", label: "Research Mode", icon: Microscope },
+  { key: "analytics", label: "Analysis", icon: BarChart3 },
+  { key: "predictions", label: "ML Optimization", icon: BrainCircuit },
+  { key: "settings", label: "Platform Settings", icon: Settings },
 ];
+
+const legacyModuleGroups: Record<string, string> = {
+  "live-machine": "dashboard",
+  simulation: "dashboard",
+  "ai-copilot": "analytics",
+  engineering: "digital-twin",
+  maintenance: "analytics",
+  "alarm-center": "analytics",
+  reports: "analytics",
+  "research-mode": "analytics",
+};
 
 const roles: UserRole[] = ["Operator", "Production Engineer", "Maintenance Engineer", "Research Mode", "Administrator"];
 const machineModes: MachineMode[] = ["Die Sinking", "Wire Cut", "EDM Drilling"];
@@ -94,7 +112,7 @@ function fmtMaybe(value: unknown, digits = 2) {
 
 function currentModule(pathname: string) {
   const key = pathname.replace("/", "") || "dashboard";
-  return modules.some((item) => item.key === key) ? key : "dashboard";
+  return modules.some((item) => item.key === key) ? key : legacyModuleGroups[key] ?? "dashboard";
 }
 
 function connectionTone(status: ConnectionStatus) {
@@ -211,12 +229,12 @@ function ShellHeader() {
 
 function Sidebar({ active }: { active: string }) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-plant-line bg-plant-deck lg:block">
-      <div className="border-b border-plant-line px-4 py-4">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-plant-muted">Aerospace EDM Cell</div>
-        <div className="mt-1 font-mono text-sm text-plant-text">CELL-EDM-04 / OPC-UA</div>
-      </div>
-      <nav className="space-y-1 p-3">
+    <nav aria-label="Dashboard navigation" className="sticky top-2 z-40 mx-4 mt-3 overflow-x-auto rounded border border-plant-line bg-plant-deck/95 p-2 shadow-glow backdrop-blur">
+      <div className="flex min-w-max items-center gap-1">
+        <div className="hidden border-r border-plant-line px-3 py-1.5 xl:block">
+          <div className="text-[9px] uppercase tracking-[0.2em] text-plant-muted">EDM Cell</div>
+          <div className="mt-0.5 font-mono text-xs text-plant-text">CELL-EDM-04</div>
+        </div>
         {modules.map((item) => {
           const Icon = item.icon;
           const selected = item.key === active;
@@ -224,7 +242,7 @@ function Sidebar({ active }: { active: string }) {
             <Link
               key={item.key}
               to={`/${item.key === "dashboard" ? "" : item.key}`}
-              className={`flex h-10 items-center gap-3 rounded border px-3 text-sm transition ${
+              className={`flex h-9 shrink-0 items-center gap-2 rounded border px-3 text-xs font-semibold uppercase tracking-wide transition ${
                 selected
                   ? "border-plant-cyan/70 bg-plant-cyan/12 text-plant-cyan"
                   : "border-transparent text-plant-muted hover:border-plant-line hover:bg-plant-panel hover:text-plant-text"
@@ -235,8 +253,8 @@ function Sidebar({ active }: { active: string }) {
             </Link>
           );
         })}
-      </nav>
-    </aside>
+      </div>
+    </nav>
   );
 }
 
@@ -382,6 +400,149 @@ function fieldAvailable(rows: RankedExperimentalCondition[], read: (condition: R
   return rows.some((condition) => typeof read(condition) === "number" && Number.isFinite(read(condition) as number));
 }
 
+const mlEditableDecimalPattern = /^-?(?:\d+(?:\.\d{0,3})?|\.\d{0,3})?$/;
+const mlCompleteDecimalPattern = /^-?(?:\d+(?:\.\d{1,3})?|\.\d{1,3})$/;
+
+function formatMlNumber(value: number, integerOnly = false) {
+  if (!Number.isFinite(value)) return "";
+  if (integerOnly) return String(Math.trunc(value));
+  return Number(value.toFixed(3)).toString();
+}
+
+function normalizeMlDraft(value: string, integerOnly = false) {
+  if (integerOnly) {
+    const sanitized = value.trim();
+    return /^\d*$/.test(sanitized) ? sanitized : null;
+  }
+
+  const normalized = value.replace(",", ".");
+  if (mlEditableDecimalPattern.test(normalized)) return normalized;
+
+  // A paste may contain more precision than the UI accepts. Keep the valid
+  // three-decimal prefix instead of rejecting the entire edit.
+  const decimal = normalized.match(/^(-?(?:\d+)?)(?:\.(\d+))?$/);
+  if (!decimal) return null;
+  return `${decimal[1] || "0"}.${decimal[2].slice(0, 3)}`;
+}
+
+function parseMlDraft(value: string, integerOnly = false) {
+  if (integerOnly) return /^\d+$/.test(value) ? Number(value) : undefined;
+  return mlCompleteDecimalPattern.test(value) ? Number(value) : undefined;
+}
+
+function MlNumberInput({ label, value, unit, onChange, onEnter, min, max, step = 0.001, readOnly = false, integerOnly = false }: { label: string; value: number; unit: string; onChange: (value: number) => void; onEnter?: () => void; min?: number; max?: number; step?: number; readOnly?: boolean; integerOnly?: boolean }) {
+  const [draft, setDraft] = useState(() => formatMlNumber(value, integerOnly));
+  const [focused, setFocused] = useState(false);
+  const [hasUncommittedDraft, setHasUncommittedDraft] = useState(false);
+
+  useEffect(() => {
+    if (!focused && !hasUncommittedDraft) setDraft(formatMlNumber(value, integerOnly));
+  }, [focused, hasUncommittedDraft, integerOnly, value]);
+
+  const commit = () => {
+    setFocused(false);
+    let next = parseMlDraft(draft, integerOnly);
+    if (next === undefined) {
+      if (min !== undefined) {
+        next = min;
+      } else {
+        setHasUncommittedDraft(true);
+        return;
+      }
+    }
+    if (min !== undefined && next < min) next = min;
+    if (max !== undefined && next > max) next = max;
+    onChange(next);
+    setDraft(formatMlNumber(next, integerOnly));
+    setHasUncommittedDraft(false);
+  };
+  const parsedDraft = parseMlDraft(draft, integerOnly);
+  const hasRangeWarning = parsedDraft !== undefined && Number.isFinite(parsedDraft) && min !== undefined && max !== undefined && (parsedDraft < min || parsedDraft > max);
+
+  const updateDraft = (nextDraft: string) => {
+    const normalized = normalizeMlDraft(nextDraft, integerOnly);
+    if (normalized === null) return;
+
+    setDraft(normalized);
+    setHasUncommittedDraft(true);
+    let parsed = parseMlDraft(normalized, integerOnly);
+    if (parsed !== undefined && max !== undefined && parsed > max) {
+      parsed = max;
+      setDraft(formatMlNumber(max, integerOnly));
+    }
+    onChange(parsed ?? Number.NaN);
+  };
+
+  const stepValue = (direction: 1 | -1) => {
+    const base = parseMlDraft(draft, integerOnly) ?? value;
+    let next = integerOnly ? Math.trunc(base + direction * step) : Number((base + direction * step).toFixed(3));
+    if (min !== undefined && next < min) next = min;
+    if (max !== undefined && next > max) next = max;
+    setDraft(formatMlNumber(next, integerOnly));
+    onChange(next);
+    setHasUncommittedDraft(false);
+  };
+
+  return (
+    <div className="block rounded border border-plant-line bg-plant-void p-3">
+      <span className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">{label}</span>
+      <span className="mt-2 flex items-center gap-2">
+        <span className="flex min-w-0 flex-1 overflow-hidden rounded border border-plant-line bg-plant-deck focus-within:border-plant-cyan">
+          <input
+            className="relative z-10 h-9 min-w-0 flex-1 cursor-text bg-transparent px-2 font-mono text-sm text-plant-text outline-none disabled:cursor-default disabled:text-plant-muted"
+            inputMode={integerOnly ? "numeric" : "decimal"}
+            type={integerOnly ? "number" : "text"}
+            autoComplete="off"
+            aria-label={`${label} (${unit})`}
+            value={draft}
+            min={min}
+            max={max}
+            step={step}
+            readOnly={readOnly}
+            onBlur={commit}
+            onFocus={() => setFocused(true)}
+            onChange={(event) => updateDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (readOnly) return;
+              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                stepValue(event.key === "ArrowUp" ? 1 : -1);
+                return;
+              }
+              if (event.key === "Home" && min !== undefined) {
+                event.preventDefault();
+                setDraft(formatMlNumber(min, integerOnly));
+                onChange(min);
+                setHasUncommittedDraft(false);
+                return;
+              }
+              if (event.key === "End" && max !== undefined) {
+                event.preventDefault();
+                setDraft(formatMlNumber(max, integerOnly));
+                onChange(max);
+                setHasUncommittedDraft(false);
+                return;
+              }
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commit();
+                if (onEnter) onEnter();
+                return;
+              }
+            }}
+          />
+          {!readOnly ? <span className="flex w-7 shrink-0 flex-col border-l border-plant-line">
+            <button aria-label={`Increase ${label}`} className="flex h-[18px] items-center justify-center text-plant-cyan hover:bg-plant-cyan/10 disabled:opacity-30" disabled={parsedDraft !== undefined && max !== undefined && parsedDraft >= max} onMouseDown={(event) => event.preventDefault()} onClick={() => stepValue(1)} type="button"><ChevronUp size={13} /></button>
+            <button aria-label={`Decrease ${label}`} className="flex h-[18px] items-center justify-center border-t border-plant-line text-plant-cyan hover:bg-plant-cyan/10 disabled:opacity-30" disabled={parsedDraft !== undefined && min !== undefined && parsedDraft <= min} onMouseDown={(event) => event.preventDefault()} onClick={() => stepValue(-1)} type="button"><ChevronDown size={13} /></button>
+          </span> : null}
+        </span>
+        <span className="text-xs text-plant-muted">{unit}</span>
+      </span>
+      {min !== undefined && max !== undefined ? <span className={`mt-2 block text-[10px] ${hasRangeWarning ? "text-plant-amber" : "text-plant-muted"}`}>{hasRangeWarning ? "Outside verified training range - prediction may be unreliable." : `Verified range: ${min} to ${max} ${unit}`}</span> : null}
+    </div>
+  );
+}
+
 function ParameterChip({ label, value, unit = "" }: { label: string; value: unknown; unit?: string }) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return (
@@ -397,15 +558,184 @@ function ParameterChip({ label, value, unit = "" }: { label: string; value: unkn
 
 function OptimizationEngine() {
   const dataset = useTwinStore((state) => state.dataset);
+  const parameters = useTwinStore((state) => state.parameters);
+  const updatePendingParameter = useTwinStore((state) => state.updatePendingParameter);
+  const applyToTwin = useTwinStore((state) => state.applyToTwin);
+  const [modelMode, setModelMode] = useState<"physical" | "research">("physical");
+
+  const handleApplyPhysicalParams = (params: { current: number; voltage: number; pulseOn: number; pulseOff: number }) => {
+    updatePendingParameter("current", params.current);
+    updatePendingParameter("voltage", params.voltage);
+    updatePendingParameter("gapVoltage", params.voltage);
+    updatePendingParameter("pulseOn", params.pulseOn);
+    updatePendingParameter("pulseOff", params.pulseOff);
+    applyToTwin();
+  };
+
   const [objective, setObjective] = useState<OptimizationObjective>("balanced");
+  const [mlInfo, setMlInfo] = useState<MlModelInfo | null>(null);
+  const [mlMaterials, setMlMaterials] = useState<Record<string, MlMaterialTableEntry>>({});
+  const [mlElectrodes, setMlElectrodes] = useState<Record<string, MlMaterialTableEntry>>({});
+  const [mlSources, setMlSources] = useState<MlSourceInfo[]>([]);
+  const [mlStatus, setMlStatus] = useState<"loading" | "ready" | "offline">("loading");
+  const [selectedWorkpiece, setSelectedWorkpiece] = useState("");
+  const [selectedElectrode, setSelectedElectrode] = useState("");
+  const [selectedCoating, setSelectedCoating] = useState("");
+  const [mlInputs, setMlInputs] = useState({
+    current_A: Math.round(parameters.current),
+    voltage_V: Math.round(parameters.voltage),
+    ton_us: parameters.pulseOn,
+  });
+  const [mlPrediction, setMlPrediction] = useState<MlPredictionResult | null>(null);
+  const [paperValidation, setPaperValidation] = useState<Array<{
+    id: string; coating: string; current_A: number; voltage_V: number; ton_us: number;
+    paper_mrr: number; paper_twr: number;
+    predicted_mrr: number | null; predicted_twr: number | null;
+    mrr_error_pct: number | null; twr_error_pct: number | null;
+  }>>([]);
+  const [mlError, setMlError] = useState("");
+  const [mlBusy, setMlBusy] = useState(false);
   const result = useMemo(() => analyzeDatasetOptimization(dataset.rows, objective), [dataset.rows, objective]);
   const topRows = result.rankedSamples.slice(0, 5);
   const best = result.bestCondition;
   const objectiveLabel = optimizationObjectives.find((item) => item.id === objective)?.label ?? "Balanced Performance";
+  const materialOptions = mlInfo?.materials.length ? mlInfo.materials : Object.keys(mlMaterials);
+  const electrodeOptions = mlInfo?.electrodes.length ? mlInfo.electrodes : Object.keys(mlElectrodes);
+  const inputRanges = getMlInputRanges();
 
   useEffect(() => {
     if (!dataset.loaded) setObjective("balanced");
   }, [dataset.loaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMlHealth()
+      .then(() => Promise.all([getMlModelInfo(), getMlMaterials(), getMlElectrodes(), getMlSources()]))
+      .then(([info, materials, electrodes, sources]) => {
+        if (cancelled) return;
+        setMlInfo(info);
+        setMlMaterials(materials);
+        setMlElectrodes(electrodes);
+        setMlSources(sources.length ? sources : info.sources ?? []);
+        setSelectedWorkpiece((current) => current || info.materials[0] || Object.keys(materials)[0] || "");
+        setSelectedElectrode((current) => current || info.electrodes[0] || Object.keys(electrodes)[0] || "");
+        setSelectedCoating((current) => current || info.coatings?.[0] || "");
+        setMlStatus("ready");
+        setMlError("");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setMlStatus("offline");
+        setMlError(error instanceof Error ? error.message : "Bundled browser model could not be loaded.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Compute Shailesh (2021) paper validation: run each real experimental row through the
+  // frozen model and record predicted vs. paper values. Runs once when the model is ready.
+  useEffect(() => {
+    if (mlStatus !== "ready") return;
+    const REAL_ROWS: Array<{ id: string; coating: string; current_A: number; voltage_V: number; ton_us: number; paper_mrr: number; paper_twr: number }> = [
+      { id: "U-01", coating: "Uncoated",     current_A: 10, voltage_V: 40, ton_us: 100,  paper_mrr: 0.0020, paper_twr: 0.0023 },
+      { id: "U-02", coating: "Uncoated",     current_A: 10, voltage_V: 45, ton_us: 500,  paper_mrr: 0.0022, paper_twr: 0.0028 },
+      { id: "U-03", coating: "Uncoated",     current_A: 10, voltage_V: 50, ton_us: 1000, paper_mrr: 0.0019, paper_twr: 0.0041 },
+      { id: "U-04", coating: "Uncoated",     current_A: 10, voltage_V: 55, ton_us: 1500, paper_mrr: 0.0027, paper_twr: 0.0029 },
+      { id: "U-05", coating: "Uncoated",     current_A: 20, voltage_V: 45, ton_us: 100,  paper_mrr: 0.0019, paper_twr: 0.0050 },
+      { id: "U-06", coating: "Uncoated",     current_A: 20, voltage_V: 40, ton_us: 500,  paper_mrr: 0.0073, paper_twr: 0.0058 },
+      { id: "U-07", coating: "Uncoated",     current_A: 20, voltage_V: 55, ton_us: 1000, paper_mrr: 0.0075, paper_twr: 0.0076 },
+      { id: "U-08", coating: "Uncoated",     current_A: 20, voltage_V: 50, ton_us: 1500, paper_mrr: 0.0111, paper_twr: 0.0087 },
+      { id: "U-09", coating: "Uncoated",     current_A: 30, voltage_V: 50, ton_us: 100,  paper_mrr: 0.0053, paper_twr: 0.0068 },
+      { id: "U-10", coating: "Uncoated",     current_A: 30, voltage_V: 55, ton_us: 500,  paper_mrr: 0.0097, paper_twr: 0.0098 },
+      { id: "U-11", coating: "Uncoated",     current_A: 30, voltage_V: 40, ton_us: 1000, paper_mrr: 0.0141, paper_twr: 0.0118 },
+      { id: "U-12", coating: "Uncoated",     current_A: 30, voltage_V: 45, ton_us: 1500, paper_mrr: 0.0172, paper_twr: 0.0124 },
+      { id: "U-13", coating: "Uncoated",     current_A: 40, voltage_V: 55, ton_us: 100,  paper_mrr: 0.0093, paper_twr: 0.0106 },
+      { id: "U-14", coating: "Uncoated",     current_A: 40, voltage_V: 50, ton_us: 500,  paper_mrr: 0.0164, paper_twr: 0.0145 },
+      { id: "U-15", coating: "Uncoated",     current_A: 40, voltage_V: 45, ton_us: 1000, paper_mrr: 0.0229, paper_twr: 0.0177 },
+      { id: "U-16", coating: "Uncoated",     current_A: 40, voltage_V: 40, ton_us: 1500, paper_mrr: 0.0282, paper_twr: 0.0212 },
+      { id: "C-01", coating: "AlCrNi (PVD)", current_A: 10, voltage_V: 40, ton_us: 100,  paper_mrr: 0.0040, paper_twr: 0.0001 },
+      { id: "C-02", coating: "AlCrNi (PVD)", current_A: 10, voltage_V: 45, ton_us: 500,  paper_mrr: 0.0093, paper_twr: 0.0002 },
+      { id: "C-03", coating: "AlCrNi (PVD)", current_A: 10, voltage_V: 50, ton_us: 1000, paper_mrr: 0.0086, paper_twr: 0.0002 },
+      { id: "C-04", coating: "AlCrNi (PVD)", current_A: 10, voltage_V: 55, ton_us: 1500, paper_mrr: 0.0065, paper_twr: 0.0003 },
+      { id: "C-05", coating: "AlCrNi (PVD)", current_A: 20, voltage_V: 45, ton_us: 100,  paper_mrr: 0.0053, paper_twr: 0.0014 },
+      { id: "C-06", coating: "AlCrNi (PVD)", current_A: 20, voltage_V: 40, ton_us: 500,  paper_mrr: 0.0107, paper_twr: 0.0022 },
+      { id: "C-07", coating: "AlCrNi (PVD)", current_A: 20, voltage_V: 55, ton_us: 1000, paper_mrr: 0.0089, paper_twr: 0.0011 },
+      { id: "C-08", coating: "AlCrNi (PVD)", current_A: 20, voltage_V: 50, ton_us: 1500, paper_mrr: 0.0148, paper_twr: 0.0022 },
+      { id: "C-09", coating: "AlCrNi (PVD)", current_A: 30, voltage_V: 50, ton_us: 100,  paper_mrr: 0.0077, paper_twr: 0.0031 },
+      { id: "C-10", coating: "AlCrNi (PVD)", current_A: 30, voltage_V: 55, ton_us: 500,  paper_mrr: 0.0106, paper_twr: 0.0041 },
+      { id: "C-11", coating: "AlCrNi (PVD)", current_A: 30, voltage_V: 40, ton_us: 1000, paper_mrr: 0.0098, paper_twr: 0.0037 },
+      { id: "C-12", coating: "AlCrNi (PVD)", current_A: 30, voltage_V: 45, ton_us: 1500, paper_mrr: 0.0099, paper_twr: 0.0046 },
+      { id: "C-13", coating: "AlCrNi (PVD)", current_A: 40, voltage_V: 55, ton_us: 100,  paper_mrr: 0.0133, paper_twr: 0.0074 },
+      { id: "C-14", coating: "AlCrNi (PVD)", current_A: 40, voltage_V: 50, ton_us: 500,  paper_mrr: 0.0125, paper_twr: 0.0081 },
+      { id: "C-15", coating: "AlCrNi (PVD)", current_A: 40, voltage_V: 45, ton_us: 1000, paper_mrr: 0.0139, paper_twr: 0.0089 },
+      { id: "C-16", coating: "AlCrNi (PVD)", current_A: 40, voltage_V: 40, ton_us: 1500, paper_mrr: 0.0121, paper_twr: 0.0095 },
+    ];
+    void Promise.all(
+      REAL_ROWS.map(async (row) => {
+        const result = await predictMl({
+          workpiece_material: "Ti-6Al-4V",
+          electrode_material: "Aluminium (Al)",
+          electrode_coating: row.coating,
+          current_A: row.current_A,
+          voltage_V: row.voltage_V,
+          ton_us: row.ton_us,
+        });
+        const pred_mrr = result.predicted_mrr;
+        const pred_twr = result.predicted_twr;
+        return {
+          id: row.id,
+          coating: row.coating,
+          current_A: row.current_A,
+          voltage_V: row.voltage_V,
+          ton_us: row.ton_us,
+          paper_mrr: row.paper_mrr,
+          paper_twr: row.paper_twr,
+          predicted_mrr: pred_mrr,
+          predicted_twr: pred_twr,
+          mrr_error_pct: pred_mrr !== null && row.paper_mrr > 0 ? Math.abs((pred_mrr - row.paper_mrr) / row.paper_mrr) * 100 : null,
+          twr_error_pct: pred_twr !== null && row.paper_twr > 0 ? Math.abs((pred_twr - row.paper_twr) / row.paper_twr) * 100 : null,
+        };
+      })
+    ).then((rows) => setPaperValidation(rows));
+  }, [mlStatus]);
+
+  const buildMlPayload = () => ({
+    workpiece_material: selectedWorkpiece,
+    electrode_material: selectedElectrode,
+    electrode_coating: selectedCoating,
+    current_A: Number(mlInputs.current_A),
+    voltage_V: Number(mlInputs.voltage_V),
+    ton_us: Number(mlInputs.ton_us),
+  });
+
+  const validMlInputs = (payload = buildMlPayload()) => {
+    if (!selectedWorkpiece || !selectedElectrode || !selectedCoating) {
+      setMlError("Select a dataset-supported workpiece, electrode, and coating condition before prediction.");
+      return false;
+    }
+    if (![payload.current_A, payload.voltage_V, payload.ton_us].every(Number.isFinite)) {
+      setMlError("Current, Voltage, and TON must each be complete numeric values before prediction.");
+      return false;
+    }
+    return true;
+  };
+
+  const runMlPrediction = async () => {
+    const payload = buildMlPayload();
+    if (!validMlInputs(payload)) return;
+    setMlBusy(true);
+    setMlError("");
+    try {
+      setMlPrediction(await predictMl(payload));
+    } catch (error) {
+      setMlError(error instanceof Error ? error.message : "Prediction failed.");
+    } finally {
+      setMlBusy(false);
+    }
+  };
+
+
 
   const columns = [
     { key: "rank", label: "Rank", show: true, render: (_condition: RankedExperimentalCondition, index: number) => `#${index + 1}` },
@@ -421,8 +751,261 @@ function OptimizationEngine() {
   ].filter((column) => column.show);
 
   return (
-    <Panel title="EDM Parameter Optimization Engine" eyebrow="Multi-objective experimental performance analysis" accent="violet">
-      {!dataset.loaded ? (
+    <Panel
+      title={modelMode === "physical" ? "Physical EDM Machine ML Engine" : "EDM Parameter Optimization Engine"}
+      eyebrow={modelMode === "physical" ? "Authoritative physical readings Random Forest (Target: ≤ 5.0% error)" : "Multi-objective experimental performance analysis (Shailesh 2021)"}
+      accent={modelMode === "physical" ? "cyan" : "violet"}
+    >
+      <div className="space-y-4">
+        {/* Dual-Model Mode Switcher */}
+        <div className="rounded-lg border border-plant-line bg-plant-void/80 p-2.5">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-plant-muted">
+              Select ML Model Architecture
+            </span>
+            <span className="text-[11px] font-mono text-plant-muted">
+              Active: <strong className={modelMode === "physical" ? "text-plant-cyan" : "text-plant-violet"}>{modelMode === "physical" ? "Mode B (Physical Machine)" : "Mode A (Research Paper)"}</strong>
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setModelMode("physical")}
+              className={`flex items-start gap-3 rounded-lg border p-3.5 text-left transition-all ${
+                modelMode === "physical"
+                  ? "border-plant-cyan/60 bg-plant-deck shadow-md shadow-plant-cyan/10"
+                  : "border-plant-line/60 bg-plant-deck/40 text-plant-muted hover:border-plant-line hover:text-plant-text"
+              }`}
+            >
+              <div className={`mt-0.5 rounded-md p-2 ${modelMode === "physical" ? "bg-plant-cyan/20 text-plant-cyan" : "bg-plant-void text-plant-muted"}`}>
+                <Cpu size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${modelMode === "physical" ? "text-plant-cyan" : "text-plant-text"}`}>
+                    Mode B: Physical Machine Model
+                  </span>
+                  <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400">
+                    REAL EXPERIMENTS
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] leading-relaxed text-plant-muted">
+                  Trained on 36 authoritative physical EDM runs (EN-31 die steel, brass electrode, EDM oil).
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-plant-muted">
+                  <span>Inputs: <span className="text-plant-text">Ip, Vg, TON, TOFF</span></span>
+                  <span>•</span>
+                  <span>Outputs: <span className="text-plant-cyan font-bold">MRR (g/min), TWR (g/min)</span></span>
+                  <span>•</span>
+                  <span>Target: <span className="text-emerald-400">≤ 5.0% error</span></span>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setModelMode("research")}
+              className={`flex items-start gap-3 rounded-lg border p-3.5 text-left transition-all ${
+                modelMode === "research"
+                  ? "border-plant-violet/60 bg-plant-deck shadow-md shadow-plant-violet/10"
+                  : "border-plant-line/60 bg-plant-deck/40 text-plant-muted hover:border-plant-line hover:text-plant-text"
+              }`}
+            >
+              <div className={`mt-0.5 rounded-md p-2 ${modelMode === "research" ? "bg-plant-violet/20 text-plant-violet" : "bg-plant-void text-plant-muted"}`}>
+                <BookOpen size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${modelMode === "research" ? "text-plant-violet" : "text-plant-text"}`}>
+                    Mode A: Research Paper Model
+                  </span>
+                  <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-violet-400">
+                    SHAILESH 2021
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] leading-relaxed text-plant-muted">
+                  Published research dataset (Ti-6Al-4V workpiece, Al coated/uncoated electrode).
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-plant-muted">
+                  <span>Inputs: <span className="text-plant-text">Ip, Vg, TON (+ Materials)</span></span>
+                  <span>•</span>
+                  <span>Outputs: <span className="text-plant-violet font-bold">MRR (mm³/min), TWR (%/min)</span></span>
+                  <span>•</span>
+                  <span>Runs: <span className="text-plant-text">32 conditions</span></span>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* View Mode Content Container */}
+        <div className={modelMode === "physical" ? "block" : "hidden"}>
+          <PhysicalMachineMlPanel onApplyToMachine={handleApplyPhysicalParams} />
+        </div>
+
+        <div className={modelMode === "research" ? "block space-y-4" : "hidden"}>
+          <div className="rounded border border-plant-line bg-plant-deck p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">ML Prediction</div>
+              <div className="mt-1 text-sm text-plant-text">Set the EDM machining condition to predict material removal and tool wear.</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <StatusPill label={mlStatus === "ready" ? "BROWSER ML READY" : mlStatus === "loading" ? "LOADING MODEL" : "MODEL UNAVAILABLE"} tone={mlStatus === "ready" ? "green" : mlStatus === "loading" ? "amber" : "red"} />
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs leading-5 text-plant-muted">Select the material condition and enter the EDM process parameters.</p>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded border border-plant-line bg-plant-void p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">1. Workpiece Material</div>
+              <select className="mt-2 h-10 w-full rounded border border-plant-line bg-plant-deck px-2 text-sm text-plant-text outline-none" value={selectedWorkpiece} onChange={(event) => setSelectedWorkpiece(event.target.value)}>
+                {materialOptions.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </div>
+
+            <div className="rounded border border-plant-line bg-plant-void p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">2. Electrode Material</div>
+              <select className="mt-2 h-10 w-full rounded border border-plant-line bg-plant-deck px-2 text-sm text-plant-text outline-none" value={selectedElectrode} onChange={(event) => setSelectedElectrode(event.target.value)}>
+                {electrodeOptions.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </div>
+
+            <div className="rounded border border-plant-line bg-plant-void p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-plant-muted">3. Electrode Coating</div>
+              <select className="mt-2 h-10 w-full rounded border border-plant-line bg-plant-deck px-2 text-sm text-plant-text outline-none" value={selectedCoating} onChange={(event) => setSelectedCoating(event.target.value)}>
+                {(mlInfo?.coatings ?? []).map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">4. EDM Process Parameters</div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <MlNumberInput label="Current" unit="A" min={inputRanges.current_A.min} max={inputRanges.current_A.max} step={1} integerOnly value={mlInputs.current_A} onChange={(value) => setMlInputs((state) => ({ ...state, current_A: value }))} onEnter={runMlPrediction} />
+            <MlNumberInput label="Voltage" unit="V" min={inputRanges.voltage_V.min} max={inputRanges.voltage_V.max} step={1} integerOnly value={mlInputs.voltage_V} onChange={(value) => setMlInputs((state) => ({ ...state, voltage_V: value }))} onEnter={runMlPrediction} />
+            <MlNumberInput label="TON" unit="us" min={inputRanges.ton_us.min} max={inputRanges.ton_us.max} step={1} integerOnly value={mlInputs.ton_us} onChange={(value) => setMlInputs((state) => ({ ...state, ton_us: value }))} onEnter={runMlPrediction} />
+          </div>
+
+          <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">5. Prediction Result</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="rounded bg-plant-cyan px-3 py-2 text-xs font-semibold uppercase text-plant-void disabled:cursor-not-allowed disabled:opacity-40" disabled={mlStatus !== "ready" || mlBusy} onClick={runMlPrediction} type="button">
+              {mlBusy ? "Predicting..." : "Predict MRR & TWR"}
+            </button>
+          </div>
+
+          {mlError ? <div className="mt-3 rounded border border-plant-red/60 bg-plant-red/10 p-3 text-sm text-plant-red">{mlError}</div> : null}
+          {mlPrediction ? (
+            <>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <MetricCard label="Predicted MRR" value={fmtMaybe(mlPrediction.predicted_mrr, 5)} unit={mlPrediction.predicted_mrr === null ? "Not reportable" : mlPrediction.mrr_unit} tone={mlPrediction.predicted_mrr === null ? "red" : "amber"} sublabel={mlPrediction.predicted_mrr !== null && mlPrediction.coverage.mrr_supported ? "ML prediction" : "Unreportable or insufficient coverage"} />
+              <MetricCard label="Predicted TWR" value={fmtMaybe(mlPrediction.predicted_twr, 5)} unit={mlPrediction.predicted_twr === null ? "Not reportable" : mlPrediction.twr_unit} tone={mlPrediction.predicted_twr === null ? "red" : "amber"} sublabel={mlPrediction.predicted_twr !== null && mlPrediction.coverage.twr_supported ? mlPrediction.domain_status : "Unreportable or unavailable"} />
+              <MetricCard label="Research Coverage" value={mlPrediction.coverage.mrr_supported && mlPrediction.coverage.twr_supported && mlPrediction.predicted_mrr !== null && mlPrediction.predicted_twr !== null ? "DIRECT PAIR" : "LIMITED"} tone={mlPrediction.coverage.mrr_supported && mlPrediction.coverage.twr_supported && mlPrediction.predicted_mrr !== null && mlPrediction.predicted_twr !== null ? "amber" : "red"} sublabel={mlPrediction.coverage.combination} />
+              </div>
+            </>
+          ) : null}
+          {(mlPrediction?.warnings.length) ? (
+            <div className="mt-3 rounded border border-plant-amber/60 bg-plant-amber/10 p-3 text-xs leading-5 text-plant-amber">
+              {[...(mlPrediction?.warnings ?? [])].slice(0, 6).map((warning) => (
+                <div key={warning}>{warning}</div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* ── Research Paper Validation ─────────────────────────────────────── */}
+          {paperValidation.length > 0 && (
+            <div className="mt-4 overflow-x-auto rounded border border-plant-line bg-plant-void p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">Research Paper Validation</div>
+                  <p className="mt-1 text-xs leading-5 text-plant-muted">
+                    Shirguppikar et al. (2021), Table 4 — Ti-6Al-4V | Aluminium (Al) | 32 real experiments.
+                    Predicted values come from the frozen ML model. Error is |predicted − paper| / paper × 100.
+                    Note: the model was trained on these rows — this is an in-sample fidelity check, not a generalization claim.
+                  </p>
+                </div>
+              </div>
+              <table className="mt-3 min-w-[860px] w-full text-left text-xs">
+                <thead className="border-b border-plant-line text-[10px] uppercase tracking-[0.12em] text-plant-muted">
+                  <tr>
+                    <th className="p-2">Expt</th>
+                    <th className="p-2">Coating</th>
+                    <th className="p-2 text-right">I (A)</th>
+                    <th className="p-2 text-right">V (V)</th>
+                    <th className="p-2 text-right">TON (µs)</th>
+                    <th className="p-2 text-right">Paper MRR</th>
+                    <th className="p-2 text-right">Pred MRR</th>
+                    <th className="p-2 text-right">MRR Err%</th>
+                    <th className="p-2 text-right">Paper TWR</th>
+                    <th className="p-2 text-right">Pred TWR</th>
+                    <th className="p-2 text-right">TWR Err%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paperValidation.map((row) => {
+                    const mrrOk = row.mrr_error_pct !== null && row.mrr_error_pct < 15;
+                    const twrOk = row.twr_error_pct !== null && row.twr_error_pct < 15;
+                    return (
+                      <tr key={row.id} className="border-b border-plant-line/60 text-plant-text hover:bg-plant-deck/40">
+                        <td className="p-2 font-mono text-plant-muted">{row.id}</td>
+                        <td className="p-2">{row.coating === "Uncoated" ? "Uncoated" : "AlCrNi"}</td>
+                        <td className="p-2 text-right">{row.current_A}</td>
+                        <td className="p-2 text-right">{row.voltage_V}</td>
+                        <td className="p-2 text-right">{row.ton_us}</td>
+                        <td className="p-2 text-right font-mono">{row.paper_mrr.toFixed(4)}</td>
+                        <td className="p-2 text-right font-mono">{row.predicted_mrr !== null ? row.predicted_mrr.toFixed(4) : "—"}</td>
+                        <td className={`p-2 text-right font-mono ${row.mrr_error_pct === null ? "text-plant-muted" : mrrOk ? "text-plant-green" : "text-plant-amber"}`}>
+                          {row.mrr_error_pct !== null ? `${row.mrr_error_pct.toFixed(1)}%` : "—"}
+                        </td>
+                        <td className="p-2 text-right font-mono">{row.paper_twr.toFixed(4)}</td>
+                        <td className="p-2 text-right font-mono">{row.predicted_twr !== null ? row.predicted_twr.toFixed(4) : "—"}</td>
+                        <td className={`p-2 text-right font-mono ${row.twr_error_pct === null ? "text-plant-muted" : twrOk ? "text-plant-green" : "text-plant-amber"}`}>
+                          {row.twr_error_pct !== null ? `${row.twr_error_pct.toFixed(1)}%` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── Model & Research Details ─────────────────────────────────────── */}
+          <details className="mt-4 rounded border border-plant-line bg-plant-void p-4">
+            <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.18em] text-plant-muted">Model &amp; Research Details</summary>
+            {mlInfo ? (
+              <>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Spec label="MRR model" value={mlInfo.selected_models?.mrr?.model_type ?? mlInfo.metrics.mrr.model ?? "Not recorded"} />
+                  <Spec label="TWR model" value={mlInfo.selected_models?.twr?.model_type ?? mlInfo.metrics.twr.model ?? "Not recorded"} />
+                  <Spec label="MRR source validation" value={`MAE ${fmtMaybe(mlInfo.metrics.mrr.grouped_by_source?.mae)}, RMSE ${fmtMaybe(mlInfo.metrics.mrr.grouped_by_source?.rmse)}, R2 ${fmtMaybe(mlInfo.metrics.mrr.grouped_by_source?.r2)}`} />
+                  <Spec label="TWR source validation" value={`MAE ${fmtMaybe(mlInfo.metrics.twr.grouped_by_source?.mae)}, RMSE ${fmtMaybe(mlInfo.metrics.twr.grouped_by_source?.rmse)}, R2 ${fmtMaybe(mlInfo.metrics.twr.grouped_by_source?.r2)}`} />
+                </div>
+                <div className="mt-3 rounded border border-plant-amber/50 bg-plant-amber/10 p-3 text-xs leading-5 text-plant-amber">
+                  <div className="font-semibold uppercase tracking-wide">Model limitations</div>
+                  <div>Shailesh-Sir single-source training: {mlInfo.real_row_count ?? 0} real observations, {mlInfo.synthetic_row_count ?? 0} supplied synthetic augmentation rows, {mlInfo.materials.length} workpiece, and {mlInfo.electrodes.length} electrode base material.</div>
+                  <div>Generalization uses real-only coating-stratified folds. Responses are source-reported mass rates in g/min; no unsupported mm3/min conversion is shown.</div>
+                </div>
+              </>
+            ) : null}
+            <div className="mt-3 space-y-2">
+              {mlSources.length ? (
+                mlSources.map((source) => (
+                  <div key={source.source_id} className="rounded border border-plant-line bg-plant-deck p-3">
+                    <div className="text-sm font-semibold text-plant-text">{source.title}</div>
+                    <div className="mt-1 text-xs leading-5 text-plant-muted">
+                      {source.year} | {source.doi || source.url || source.source_id} | {source.workpiece} | {source.electrodes} | {source.observations_used} rows
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-plant-muted">No bundled research-source records are available.</div>
+              )}
+            </div>
+          </details>
+        </div>
+
+        {!dataset.loaded ? (
         <div className="rounded border border-dashed border-plant-line bg-plant-void p-5">
           <div className="text-sm font-semibold uppercase tracking-wide text-plant-muted">Status: Waiting For Dataset</div>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-plant-text">
@@ -533,10 +1116,13 @@ function OptimizationEngine() {
           )}
         </div>
       )}
+        </div>
+      </div>
     </Panel>
   );
 }
 function LiveCommandPanel() {
+  const [commandNotice, setCommandNotice] = useState("");
   const dataMode = useTwinStore((state) => state.dataMode);
   const connectionStatus = useTwinStore((state) => state.connectionStatus);
   const machineState = useTwinStore((state) => state.machineState);
@@ -562,17 +1148,23 @@ function LiveCommandPanel() {
     ["Iso", "isometric"],
     ["Free", "free"],
   ];
+  const runCommand = (label: string, command: () => boolean) => {
+    const sent = command();
+    setCommandNotice(sent ? "" : `${label} is unavailable because the native Unity WebSocket gateway is not connected.`);
+  };
 
   return (
     <Panel title="Live Unity Commands" eyebrow="Website controls Unity machine" accent="cyan">
-      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-4">
+        <div>
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-plant-muted">Machine commands</div>
+          <div className="grid grid-cols-2 gap-2">
           {commands.map(([label, command, tone]) => (
             <button
               key={label}
-              className={`rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+              className={`min-h-10 rounded border px-2 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                 tone === "red"
-                  ? "border-plant-red bg-plant-red/15 text-plant-red"
+                  ? "col-span-2 border-plant-red bg-plant-red/15 text-plant-red"
                   : tone === "green"
                     ? "border-plant-green bg-plant-green/15 text-plant-green"
                     : tone === "amber"
@@ -580,27 +1172,32 @@ function LiveCommandPanel() {
                       : "border-plant-cyan bg-plant-cyan/15 text-plant-cyan"
               } disabled:cursor-not-allowed disabled:opacity-40`}
               disabled={commandDisabled}
-              onClick={() => command()}
+              onClick={() => runCommand(label, command)}
               type="button"
             >
               {label}
             </button>
           ))}
-          <div className="h-9 w-px bg-plant-line" />
+          </div>
+        </div>
+        <div>
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-plant-muted">Camera</div>
+          <div className="grid grid-cols-3 gap-2">
           {cameraViews.map(([label, view]) => (
             <button
               key={view}
-              className={`rounded border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+              className={`min-h-9 rounded border px-2 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                 cameraView === view ? "border-plant-cyan bg-plant-cyan/15 text-plant-cyan" : "border-plant-line text-plant-muted hover:text-plant-text"
               }`}
-              onClick={() => setLiveCameraView(view)}
+              onClick={() => runCommand(`${label} camera`, () => setLiveCameraView(view))}
               type="button"
             >
               {label}
             </button>
           ))}
+          </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+        <div className="grid gap-2 sm:grid-cols-2">
           <StatusPill label={`State ${machineState}`} tone={machineState === "MACHINING" ? "green" : machineState === "EMERGENCY_STOP" ? "red" : "cyan"} />
           <StatusPill label={`Progress ${fmt(telemetry.progressPercent || telemetry.cyclePercent, 0)}%`} tone="amber" />
           <StatusPill label={`Elapsed ${secondsLabel(telemetry.elapsedTimeSeconds)}`} tone="cyan" />
@@ -608,6 +1205,7 @@ function LiveCommandPanel() {
           <StatusPill label={`Tool ${fmt(telemetry.toolPosition, 2)}`} tone="violet" />
           <StatusPill label={`Spark ${telemetry.sparkActive ? "On" : "Off"}`} tone={telemetry.sparkActive ? "green" : "red"} />
         </div>
+        {commandNotice ? <div className="rounded border border-plant-amber/60 bg-plant-amber/10 p-2 text-xs leading-5 text-plant-amber">{commandNotice}</div> : null}
       </div>
     </Panel>
   );
@@ -807,51 +1405,74 @@ function AICopilot() {
   const dataMode = useTwinStore((state) => state.dataMode);
   const dataset = useTwinStore((state) => state.dataset);
   const previous = history.length > 1 ? history[history.length - 2] : null;
-  const sourceLabel = dataMode === "dataset" ? "Dataset" : dataMode === "live-unity" ? "Live Unity" : "Simulation";
-  const mrrDelta = previous ? metrics.mrr - previous.mrr : 0;
-  const recommendations = [
-    dataMode === "dataset" && dataset.loaded
-      ? `Dataset sample ${dataset.index + 1}/${dataset.rows.length}: MRR is ${fmt(metrics.mrr, 2)} mm3/min${previous ? ` (${mrrDelta >= 0 ? "+" : ""}${fmt(mrrDelta, 2)} from previous sample)` : ""}.`
-      : dataMode === "live-unity"
-        ? `Live Unity telemetry is authoritative. Current MRR is ${fmt(metrics.mrr, 2)} mm3/min and machine health is ${fmt(metrics.machineHealth, 0)}%.`
-        : `Simulation engine is authoritative. Calculated MRR is ${fmt(metrics.mrr, 2)} mm3/min at ${fmt(parameters.current, 2)} A and ${fmt(parameters.voltage, 2)} V.`,
-    metrics.arcRatio > 0.28
-      ? `Arc ratio is elevated at ${fmt(metrics.arcRatio * 100, 1)}%. Increase flushing pressure or widen the gap before raising current.`
-      : `Gap behavior is stable: gap voltage is ${fmt(parameters.gapVoltage, 2)} V and stability is ${fmt(metrics.gapStability, 0)}%.`,
-    metrics.surfaceRoughness > 2.8
-      ? `Surface roughness is high at ${fmt(metrics.surfaceRoughness, 2)} um. Reduce pulse ON or increase pulse OFF if finish quality is the priority.`
-      : metrics.remainingToolLife < 35
-        ? `Tool wear is trending upward. Remaining tool life is ${fmt(metrics.remainingToolLife, 0)}%; plan electrode maintenance.`
-        : `Process appears stable for ${sourceLabel}. Duty cycle is ${fmt(metrics.dutyCycle, 1)}% and tool life remains ${fmt(metrics.remainingToolLife, 0)}%.`,
+
+  // Build honest observations explicitly labeled with their true source
+  let mrrText = "";
+  let stabilityText = "";
+
+  if (dataMode === "live-unity") {
+    mrrText = `Live ESP32 telemetry is connected. Current MRR is calculated at ${fmt(metrics.mrr, 2)} mm3/min.`;
+  } else if (dataMode === "dataset" && dataset.loaded) {
+    const mrrDelta = previous ? metrics.mrr - previous.mrr : 0;
+    mrrText = `Dataset sample ${dataset.index + 1}/${dataset.rows.length}: Measured MRR is ${fmt(metrics.mrr, 2)} mm3/min${previous ? ` (${mrrDelta >= 0 ? "+" : ""}${fmt(mrrDelta, 2)} from previous sample)` : ""}.`;
+  } else {
+    mrrText = `Dashboard is in Simulation mode. Displayed MRR is a calculated estimate (${fmt(metrics.mrr, 2)} mm3/min) based on Current (${fmt(parameters.current, 2)} A) and Voltage (${fmt(parameters.voltage, 2)} V), not a physical measurement.`;
+  }
+
+  if (dataMode === "live-unity") {
+    stabilityText = metrics.arcRatio > 0.28
+        ? `Arc ratio is ${fmt(metrics.arcRatio * 100, 1)}% — above the 28% threshold. Consider increasing flushing pressure or widening the gap.`
+        : `Arc ratio is ${fmt(metrics.arcRatio * 100, 1)}% — within normal range. Gap stability is ${fmt(metrics.gapStability, 0)}%.`;
+  } else if (dataMode === "dataset" && dataset.loaded) {
+    stabilityText = `Dataset sample ${dataset.index + 1} of ${dataset.rows.length}. Surface roughness (Ra) is ${fmt(metrics.surfaceRoughness, 2)} µm${previous ? `; changed by ${fmt(metrics.surfaceRoughness - previous.surfaceRoughness, 2)} µm from previous sample` : ""}.`;
+  } else {
+    stabilityText = `Simulation: duty cycle ${fmt(metrics.dutyCycle, 1)}%, dielectric temperature ${fmt(metrics.dielectricTemperature, 1)} °C. These are calculated values, not measured.`;
+  }
+
+  const observations = [
+    {
+      label: "Operating Point",
+      text: `Machine setpoints are: Current = ${fmt(parameters.current, 1)} A, Voltage = ${fmt(parameters.voltage, 1)} V, TON = ${fmt(parameters.pulseOn, 0)} µs.`,
+      source: "Dashboard input"
+    },
+    {
+      label: "Material Removal Rate",
+      text: mrrText,
+      source: dataMode === "dataset" ? "Dataset row (measured)" : dataMode === "live-unity" ? "Measured (ESP32)" : "Simulation (calculated)"
+    },
+    {
+      label: "Process Stability",
+      text: stabilityText,
+      source: dataMode === "dataset" ? "Dataset row (measured)" : dataMode === "live-unity" ? "Rule-based on telemetry" : "Simulation (calculated)"
+    }
   ];
 
   return (
-    <Panel title="EDM AI Copilot" eyebrow={`Mode-aware reasoning / ${sourceLabel}`} accent="violet">
+    <Panel title="System Diagnostics" eyebrow="Condition monitoring & telemetry" accent="violet">
       <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
         <div className="space-y-3">
-          {recommendations.map((item, index) => (
-            <div key={item} className="rounded border border-plant-line bg-plant-deck p-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-plant-cyan">
-                <Bot size={16} />
-                Observation {index + 1}
+          {observations.map((obs) => (
+            <div key={obs.label} className="rounded border border-plant-line bg-plant-deck p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-plant-cyan">
+                  <Bot size={16} />
+                  {obs.label}
+                </div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-plant-muted bg-plant-void px-2 py-0.5 rounded border border-plant-line">
+                  Source: {obs.source}
+                </div>
               </div>
-              <p className="text-sm leading-6 text-plant-text">{item}</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <StatusPill label={`MRR ${fmt(metrics.mrr, 2)}`} tone="green" />
-                <StatusPill label={`I ${fmt(parameters.current, 2)} A`} tone="amber" />
-                <StatusPill label={`Health ${fmt(metrics.machineHealth, 0)}%`} tone="cyan" />
-              </div>
+              <p className="text-sm leading-6 text-plant-text">{obs.text}</p>
             </div>
           ))}
         </div>
         <div className="rounded border border-plant-line bg-plant-deck p-4">
-          <div className="text-sm font-semibold uppercase text-plant-text">Virtual Camera Panel</div>
-          <div className="mt-4 aspect-video rounded border border-plant-line bg-[radial-gradient(circle_at_50%_52%,rgba(244,178,77,0.45),transparent_12%),radial-gradient(circle_at_52%_50%,rgba(40,215,255,0.28),transparent_21%),#070b12]" />
-          <div className="mt-3 space-y-2 text-sm">
-            <VisionRow label="Data source" value={sourceLabel} tone="violet" />
-            <VisionRow label="Spark quality" value={metrics.arcRatio < 0.25 ? "Clean pulse train" : "Arc contamination"} tone={metrics.arcRatio < 0.25 ? "green" : "amber"} />
-            <VisionRow label="Heat distribution" value={`${fmt(metrics.dielectricTemperature, 1)} degC fluid`} tone={metrics.dielectricTemperature > 30 ? "amber" : "cyan"} />
-            <VisionRow label="Electrode wear" value={`${fmt(100 - metrics.remainingToolLife, 0)}% consumed`} tone={metrics.remainingToolLife < 30 ? "red" : "green"} />
+          <div className="text-sm font-semibold uppercase text-plant-text">System Status</div>
+          <div className="mt-4 space-y-2 text-sm">
+            <VisionRow label="Telemetry" value={dataMode === "live-unity" ? "Connected" : "Not connected"} tone={dataMode === "live-unity" ? "green" : "amber"} />
+            <VisionRow label="MRR Basis" value={dataMode === "live-unity" ? "Measured" : dataMode === "dataset" ? "Historical data" : "Simulation model"} tone={dataMode === "live-unity" || dataMode === "dataset" ? "green" : "cyan"} />
+            <VisionRow label="AI Diagnostic" value="Rule-based expert system" tone="violet" />
+            <VisionRow label="Failure prediction" value="Not supported" tone="amber" />
           </div>
         </div>
       </div>
@@ -868,28 +1489,88 @@ function VisionRow({ label, value, tone }: { label: string; value: string; tone:
 }
 
 function Maintenance() {
+  const dataMode = useTwinStore((state) => state.dataMode);
   const metrics = useTwinStore((state) => state.metrics);
-  const items = [
-    ["Pump Health", 92 - Math.max(0, 8 - metrics.coolingRate) * 4],
-    ["Filter Health", 84 - metrics.arcRatio * 18],
-    ["Servo Health", metrics.gapStability * 0.92],
-    ["Power Supply", 96 - Math.max(0, metrics.cabinetTemperature - 42) * 0.8],
-    ["Electrode Life", metrics.remainingToolLife],
-    ["Sensor Health", metrics.twinAccuracy],
-  ] as const;
+  const isLive = dataMode === "live-unity";
+
+  // Each card specifies its real data source and what can/cannot be supported
+  const items: Array<{
+    label: string;
+    status: string;
+    badge: string;
+    tone: "green" | "amber" | "red";
+    note: string;
+  }> = [
+    {
+      label: "Pump Health",
+      status: "No flow/pressure telemetry",
+      badge: "No data",
+      tone: "amber",
+      note: "Requires a flow or differential-pressure sensor connected to ESP32.",
+    },
+    {
+      label: "Filter Health",
+      status: "No differential-pressure telemetry",
+      badge: "No data",
+      tone: "amber",
+      note: "Requires delta-P measurement across dielectric filter. Not currently available.",
+    },
+    {
+      label: "Servo / Toolhead",
+      status: isLive ? "ESP32 serial connected" : "Not connected",
+      badge: isLive ? "Connected" : "Simulation only",
+      tone: isLive ? "green" : "amber",
+      note: isLive
+        ? "Servo position and motion reported from ESP32 in real time."
+        : "No live servo telemetry. Dashboard uses simulated position.",
+    },
+    {
+      label: "Power Supply",
+      status: "No cabinet temperature sensor",
+      badge: "No data",
+      tone: "amber",
+      note: "Requires cabinet thermistor or power-supply current sense. Not currently wired.",
+    },
+    {
+      label: "Electrode Life",
+      status: isLive
+        ? `Tool wear rate: ${fmt(metrics.toolWearRate, 3)} %/min (simulation-derived)`
+        : "Simulation only",
+      badge: isLive ? "Partial" : "Simulation only",
+      tone: "amber",
+      note: "Electrode mass is not measured directly. Wear rate is estimated from the physics simulation, not from a load cell or mass scale.",
+    },
+    {
+      label: "Sensor Network",
+      status: isLive ? "Alarm thresholds active" : "Rule-based limits only",
+      badge: isLive ? "Active" : "Simulation",
+      tone: isLive ? "green" : "amber",
+      note: isLive
+        ? "Alarm thresholds are applied to live ESP32 sensor readings."
+        : "Limits are applied to simulated values. No physical sensors are connected.",
+    },
+  ];
+
   return (
-    <Panel title="Predictive Maintenance" eyebrow="Remaining useful life" accent="green">
+    <Panel title="Predictive Maintenance" eyebrow="Condition monitoring — honest telemetry status" accent="green">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {items.map(([label, value]) => (
-          <div key={label} className="rounded border border-plant-line bg-plant-deck p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-plant-text">{label}</div>
-              <div className={`font-mono text-sm ${value < 35 ? "text-plant-red" : value < 70 ? "text-plant-amber" : "text-plant-green"}`}>{fmt(value, 0)}%</div>
+        {items.map((item) => (
+          <div key={item.label} className="rounded border border-plant-line bg-plant-deck p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-plant-text">{item.label}</div>
+              <span
+                className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  item.tone === "green"
+                    ? "bg-plant-green/15 text-plant-green"
+                    : item.tone === "red"
+                    ? "bg-plant-red/15 text-plant-red"
+                    : "bg-plant-amber/15 text-plant-amber"
+                }`}
+              >
+                {item.badge}
+              </span>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded bg-plant-void">
-              <div className={`h-full ${value < 35 ? "bg-plant-red" : value < 70 ? "bg-plant-amber" : "bg-plant-green"}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
-            </div>
-            <div className="mt-3 text-xs text-plant-muted">Failure probability: {fmt(Math.max(2, 100 - value) * 0.28, 1)}%</div>
+            <div className="mt-2 text-xs leading-5 text-plant-muted">{item.note}</div>
           </div>
         ))}
       </div>
@@ -1217,42 +1898,61 @@ function NotificationStack() {
 }
 
 function Dashboard({ active }: { active: string }) {
-  const metrics = useTwinStore((state) => state.metrics);
-  const parameters = useTwinStore((state) => state.parameters);
-
-  const showControl = ["dashboard", "machine-control", "simulation", "live-machine"].includes(active);
-  const showSensors = ["dashboard", "digital-twin", "engineering", "settings"].includes(active);
-  const showAI = ["dashboard", "ai-copilot", "predictions"].includes(active);
-  const showMaintenance = ["dashboard", "maintenance", "predictions"].includes(active);
-  const showReports = ["dashboard", "analytics", "reports"].includes(active);
+  const overview = active === "dashboard";
+  const showTwin = overview || active === "digital-twin" || active === "machine-control";
+  const showToolheadTwin = overview || active === "digital-twin" || active === "machine-control" || active === "toolhead";
+  const showMachineControl = overview || active === "digital-twin" || active === "machine-control";
+  const showAnalysis = overview || active === "analytics";
+  const showMl = overview || active === "predictions";
+  const analysisWorkspace = active === "analytics";
 
   return (
     <main className="space-y-4 p-4">
-      <LiveMetrics />
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]">
-        <MachineView />
-        <div className="grid gap-4">
-          <TrendChart dataKey="voltage" color="#28d7ff" title="Voltage Trend" unit="V" />
-          <TrendChart dataKey="current" color="#f4b24d" title="Current Trend" unit="A" />
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-        <TrendChart dataKey="pulseOn" color="#3ddc97" title="Pulse ON Trend" unit="us" />
-        <TrendChart dataKey="toolWearRate" color="#ff6f91" title="Tool Wear Rate (TWR)" unit="%/min" />
-        <TrendChart dataKey="dutyCycle" color="#b587ff" title="Duty Cycle Trend" unit="%" />
-        <TrendChart dataKey="mrr" color="#61e3ff" title="Material Removal Rate (MRR)" unit="mm3/min" />
-      </div>
-      {showControl ? <DatasetPanel /> : null}
-      {showControl ? <OptimizationEngine /> : null}
-      {showControl ? <LiveCommandPanel /> : null}
-      {showControl ? <MachineControl /> : null}
-      {showSensors ? <SensorFusion /> : null}
-      {showAI ? <AICopilot /> : null}
-      {active === "engineering" || active === "digital-twin" || active === "dashboard" ? <EngineeringWorkspace /> : null}
-      {showMaintenance ? <Maintenance /> : null}
-      {active === "alarm-center" || active === "dashboard" ? <AlarmCenter /> : null}
-      {active === "research-mode" ? <ResearchMode /> : null}
-      {showReports ? <AnalyticsReports /> : null}
+      {overview ? <LiveMetrics /> : null}
+
+      {showTwin ? (
+        <section aria-label="Digital Twin and machine control" className="space-y-4">
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
+            <MachineView />
+            <LiveCommandPanel />
+          </div>
+          {showMachineControl ? <MachineControl /> : null}
+          {showMachineControl ? <DatasetPanel /> : null}
+        </section>
+      ) : null}
+
+      {showToolheadTwin ? (
+        <section aria-label="Toolhead Digital Twin" className="border-t border-plant-line pt-5">
+          <ToolheadDigitalTwin />
+        </section>
+      ) : null}
+
+      {showAnalysis ? (
+        <section aria-label="Analysis and graphs" className="space-y-3">
+          <div className="border-b border-plant-line pb-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-plant-muted">Analysis</div>
+            <h2 className="mt-1 text-base font-semibold uppercase text-plant-text">Process Graphs</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <TrendChart dataKey="voltage" color="#28d7ff" title="Voltage Trend" unit="V" />
+            <TrendChart dataKey="current" color="#f4b24d" title="Current Trend" unit="A" />
+            <TrendChart dataKey="pulseOn" color="#3ddc97" title="Pulse ON Trend" unit="us" />
+            <TrendChart dataKey="toolWearRate" color="#ff6f91" title="Tool Wear Rate (TWR)" unit="%/min" />
+            <TrendChart dataKey="dutyCycle" color="#b587ff" title="Duty Cycle Trend" unit="%" />
+            <TrendChart dataKey="mrr" color="#61e3ff" title="Material Removal Rate (MRR)" unit="mm3/min" />
+          </div>
+          <AnalyticsReports />
+        </section>
+      ) : null}
+
+      {showMl ? <OptimizationEngine /> : null}
+
+      {active === "digital-twin" ? <SensorFusion /> : null}
+      {active === "digital-twin" ? <EngineeringWorkspace /> : null}
+      {analysisWorkspace ? <AICopilot /> : null}
+      {analysisWorkspace ? <Maintenance /> : null}
+      {analysisWorkspace ? <AlarmCenter /> : null}
+      {analysisWorkspace ? <ResearchMode /> : null}
       {active === "settings" ? (
         <>
           <Panel title="Platform Settings" eyebrow="Role and integration status" accent="cyan">
@@ -1266,12 +1966,6 @@ function Dashboard({ active }: { active: string }) {
           <EventLogPanel />
         </>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-4">
-        <StatusPill label={`${parameters.machiningMode}`} tone="cyan" />
-        <StatusPill label={`${parameters.electrodeMaterial} electrode`} tone="amber" />
-        <StatusPill label={`${parameters.workpieceMaterial}`} tone="violet" />
-        <StatusPill label={`${fmt(metrics.oee, 0)}% OEE`} tone="green" />
-      </div>
     </main>
   );
 }
@@ -1283,6 +1977,7 @@ export default function App() {
 
   useEffect(() => {
     initializeLiveUnityService();
+    initializeToolheadService();
   }, []);
 
   useInterval(tick, 1000);
@@ -1290,14 +1985,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-plant-void text-plant-text">
       <NotificationStack />
-      <div className="flex min-h-screen">
-        <Sidebar active={active} />
-        <div className="min-w-0 flex-1">
+      <div className="min-h-screen">
+        <div className="min-w-0">
           <ShellHeader />
-          <div className="flex items-center gap-2 border-b border-plant-line bg-plant-panel px-4 py-2 text-xs uppercase tracking-wide text-plant-muted lg:hidden">
-            <Database size={14} />
-            EDM platform modules are available in the desktop sidebar.
-          </div>
+          <Sidebar active={active} />
           <Dashboard active={active} />
           <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-plant-line px-4 py-3 text-[11px] uppercase tracking-wide text-plant-muted">
             <span>EDM Digital Twin Platform / React 19 / Physics-informed simulation</span>

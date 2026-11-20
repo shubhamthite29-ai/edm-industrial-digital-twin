@@ -1,0 +1,242 @@
+[
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 10.0,
+      "voltage_V": 40.0,
+      "ton_us": 100.0
+    },
+    "python_mrr": 0.0020261807133413125,
+    "python_twr": 0.002300102860052452
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 10.0,
+      "voltage_V": 45.0,
+      "ton_us": 500.0
+    },
+    "python_mrr": 0.002248089358367033,
+    "python_twr": 0.0028001063553304865
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 10.0,
+      "voltage_V": 50.0,
+      "ton_us": 1000.0
+    },
+    "python_mrr": 0.0019007248990207243,
+    "python_twr": 0.004100118818387266
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 10.0,
+      "voltage_V": 55.0,
+      "ton_us": 1500.0
+    },
+    "python_mrr": 0.002724441299395649,
+    "python_twr": 0.0029003924843131112
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 20.0,
+      "voltage_V": 45.0,
+      "ton_us": 100.0
+    },
+    "python_mrr": 0.0020051066283439866,
+    "python_twr": 0.004999926504199332
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 20.0,
+      "voltage_V": 40.0,
+      "ton_us": 500.0
+    },
+    "python_mrr": 0.0074123831832007365,
+    "python_twr": 0.005799965771151853
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 20.0,
+      "voltage_V": 55.0,
+      "ton_us": 1000.0
+    },
+    "python_mrr": 0.007536895322166707,
+    "python_twr": 0.00760011915845126
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 20.0,
+      "voltage_V": 50.0,
+      "ton_us": 1500.0
+    },
+    "python_mrr": 0.01116297733387578,
+    "python_twr": 0.008699802864863304
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 30.0,
+      "voltage_V": 50.0,
+      "ton_us": 100.0
+    },
+    "python_mrr": 0.005313381286065502,
+    "python_twr": 0.006800064202511136
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 30.0,
+      "voltage_V": 55.0,
+      "ton_us": 500.0
+    },
+    "python_mrr": 0.009717445181841085,
+    "python_twr": 0.009799863367542145
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 30.0,
+      "voltage_V": 40.0,
+      "ton_us": 1000.0
+    },
+    "python_mrr": 0.013967526458665527,
+    "python_twr": 0.011800211748624083
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 30.0,
+      "voltage_V": 45.0,
+      "ton_us": 1500.0
+    },
+    "python_mrr": 0.017199788602457654,
+    "python_twr": 0.012400153288737987
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 40.0,
+      "voltage_V": 55.0,
+      "ton_us": 100.0
+    },
+    "python_mrr": 0.009343340180388104,
+    "python_twr": 0.010578745645277315
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 40.0,
+      "voltage_V": 50.0,
+      "ton_us": 500.0
+    },
+    "python_mrr": 0.016399628178188796,
+    "python_twr": 0.014499811793300895
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 40.0,
+      "voltage_V": 45.0,
+      "ton_us": 1000.0
+    },
+    "python_mrr": 0.022899685633668284,
+    "python_twr": 0.017699881510378556
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "Uncoated",
+      "current_A": 40.0,
+      "voltage_V": 40.0,
+      "ton_us": 1500.0
+    },
+    "python_mrr": 0.0281989864285505,
+    "python_twr": 0.021199260148298583
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "AlCrNi (PVD)",
+      "current_A": 10.0,
+      "voltage_V": 40.0,
+      "ton_us": 100.0
+    },
+    "python_mrr": 0.00397682178014929,
+    "python_twr": 0.00010009498187044
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "AlCrNi (PVD)",
+      "current_A": 10.0,
+      "voltage_V": 45.0,
+      "ton_us": 500.0
+    },
+    "python_mrr": 0.00925859659823193,
+    "python_twr": 0.00020005750868376193
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "AlCrNi (PVD)",
+      "current_A": 10.0,
+      "voltage_V": 50.0,
+      "ton_us": 1000.0
+    },
+    "python_mrr": 0.008600028792945927,
+    "python_twr": 0.00020004889155837707
+  },
+  {
+    "input": {
+      "workpiece_material": "Ti-6Al-4V",
+      "electrode_material": "Aluminium (Al)",
+      "electrode_coating": "AlCrNi (PVD)",
+      "current_A": 10.0,
+      "voltage_V": 55.0,
+      "ton_us": 1500.0
+    },
+    "python_mrr": 0.0064774788788496945,
+    "python_twr": 0.0002999933451525908
+  }
+]

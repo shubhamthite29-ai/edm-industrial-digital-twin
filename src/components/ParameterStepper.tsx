@@ -83,15 +83,18 @@ export function ParameterStepper({ id, label, unit, min, max, step, decimals = 2
       return;
     }
 
-    applyValue(parsed);
+    // Typed values are deliberately not clamped. The user must be able to enter
+    // an out-of-range value, review the warning, and decide whether to apply it.
+    updatePendingParameter(id, parsed as MachineParameters[typeof id]);
+    setDraft(formatNumber(parsed, displayDecimals));
   };
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_124px] items-center gap-3 rounded border border-plant-line bg-plant-deck p-3">
       <div className="min-w-0">
         <div className="truncate text-xs font-semibold uppercase tracking-wide text-plant-text">{label}</div>
-        <div className="mt-1 text-[11px] text-plant-muted">
-          {min} to {max} {unit}
+        <div className={`mt-1 text-[11px] ${numericValue < min || numericValue > max ? "text-plant-amber" : "text-plant-muted"}`}>
+          {numericValue < min || numericValue > max ? `Outside configured range: ${min} to ${max} ${unit}` : `${min} to ${max} ${unit}`}
         </div>
       </div>
       <div className="grid grid-cols-[34px_1fr_34px] items-center rounded border border-plant-line bg-plant-void">
@@ -104,9 +107,11 @@ export function ParameterStepper({ id, label, unit, min, max, step, decimals = 2
           <ChevronDown size={16} />
         </button>
         <input
-          className="h-10 min-w-0 border-x border-plant-line bg-transparent px-1 text-center font-mono text-sm text-plant-text outline-none"
+          className="relative z-10 h-10 min-w-0 cursor-text border-x border-plant-line bg-transparent px-1 text-center font-mono text-sm text-plant-text outline-none"
           type="text"
           inputMode="decimal"
+          autoComplete="off"
+          aria-label={`${label} (${unit})`}
           value={draft}
           onBlur={commitDraft}
           onChange={(event) => updateFromDraft(event.target.value)}

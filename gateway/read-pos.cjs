@@ -1,0 +1,1 @@
+const { SerialPort } = require('serialport'); const { ReadlineParser } = require('@serialport/parser-readline'); const port = new SerialPort({ path: 'COM6', baudRate: 115200 }); let count = 0; const parser = port.pipe(new ReadlineParser({ delimiter: '\n' })); parser.on('data', data => { console.log(data); count++; if(count > 3) process.exit(0); });

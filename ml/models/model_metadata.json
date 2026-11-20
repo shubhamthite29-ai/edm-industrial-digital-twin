@@ -1,0 +1,237 @@
+{
+  "model_version": "edm-ml-v1.2-browser",
+  "training_dataset_version": "literature-v0.4-shirguppikar-first",
+  "source_count": 3,
+  "row_count": 87,
+  "mrr_row_count": 87,
+  "twr_row_count": 72,
+  "materials": [
+    "Aluminium 6061",
+    "Ti-6Al-4V",
+    "Waspaloy"
+  ],
+  "electrodes": [
+    "Aluminium",
+    "Brass",
+    "Copper",
+    "Graphite"
+  ],
+  "process_features": [
+    "current_A",
+    "voltage_V",
+    "ton_us"
+  ],
+  "material_features": [],
+  "categorical_features": [
+    "workpiece_material",
+    "electrode_material"
+  ],
+  "input_observation_ranges": {
+    "current_A": {
+      "min": 10.0,
+      "max": 40.0
+    },
+    "voltage_V": {
+      "min": 30.0,
+      "max": 60.0
+    },
+    "ton_us": {
+      "min": 4.0,
+      "max": 1500.0
+    },
+    "toff_us": {
+      "min": 3.0,
+      "max": 20.0
+    },
+    "electrode_rotation_rpm": {
+      "min": 0.0,
+      "max": 600.0
+    }
+  },
+  "features": [
+    "current_A",
+    "electrode_material",
+    "ton_us",
+    "voltage_V",
+    "workpiece_material"
+  ],
+  "validation_method": {
+    "random_split": "80/20 diagnostic, fixed seed 42",
+    "primary": "Leave-one-source-out grouped validation by paper/source",
+    "grouped_by_material_electrode": "Leave-one-material/electrode-combination-out where trainable",
+    "leave_one_material_out": "Leave-one-workpiece-material-out where trainable"
+  },
+  "metrics": {
+    "mrr": {
+      "model": "linear_regression",
+      "alpha": 0.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 7.017925789963152,
+        "rmse": 9.148074593627358,
+        "mape": 219.94635564381193,
+        "r2": 0.32675473953260104,
+        "median_ape": 103.92601066026441,
+        "max_ape": 1031.2366048242093,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 55.85127749986155,
+        "rmse": 69.14209502535768,
+        "mape": 1376.876813879029,
+        "r2": -1.1042424001106137,
+        "median_ape": 436.1640004819195,
+        "max_ape": 12117.266099474533,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 52.94636917368595,
+        "rmse": 66.05382427335424,
+        "mape": 1302.873325519933,
+        "r2": -0.9204660382983727,
+        "median_ape": 333.8464642736732,
+        "max_ape": 12117.266099474533,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 55.85127749986155,
+        "rmse": 69.14209502535768,
+        "mape": 1376.876813879029,
+        "r2": -1.1042424001106137,
+        "median_ape": 436.1640004819195,
+        "max_ape": 12117.266099474533,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    },
+    "twr": {
+      "model": "ridge_regression",
+      "alpha": 10.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 20.270940412656408,
+        "rmse": 35.18637458278414,
+        "mape": 507.5428904274128,
+        "r2": 0.4602398244424065,
+        "median_ape": 119.46100790185878,
+        "max_ape": 2899.775641890008,
+        "validation_samples": 14,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 35.29140609163037,
+        "rmse": 61.89240780769647,
+        "mape": 889.8288148710054,
+        "r2": -1.6717256888470238,
+        "median_ape": 94.78450246623913,
+        "max_ape": 18068.24609108472,
+        "validation_samples": 72,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 43.241163616178156,
+        "rmse": 63.13601596236363,
+        "mape": 1230.804830115626,
+        "r2": -1.7801706622628433,
+        "median_ape": 570.1398573256686,
+        "max_ape": 18068.24609108472,
+        "validation_samples": 72,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 35.29140609163037,
+        "rmse": 61.89240780769647,
+        "mape": 889.8288148710054,
+        "r2": -1.6717256888470238,
+        "median_ape": 94.78450246623913,
+        "max_ape": 18068.24609108472,
+        "validation_samples": 72,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 72
+    }
+  },
+  "target_units": {
+    "mrr": "mm3/min",
+    "twr": "mm3/min"
+  },
+  "selected_models": {
+    "mrr": {
+      "model_type": "linear_regression",
+      "alpha": 0.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "weights": [
+        39.9187834952265,
+        3.5477333790270835,
+        0.18887863428490337,
+        0.6199002463117913,
+        102.49424865581912,
+        -20.183641401722195,
+        -42.391823758870245,
+        -20.183641401722202,
+        12.799891632316177,
+        22.593329132316267,
+        24.709204132316188
+      ],
+      "training_fit_metrics": {
+        "mae": 5.7881719469433985,
+        "rmse": 7.9742356300286446,
+        "mape": 126.765330073681,
+        "r2": 0.9720109068887917,
+        "median_ape": 48.238943564131766,
+        "max_ape": 1189.6682188677544
+      }
+    },
+    "twr": {
+      "model_type": "ridge_regression",
+      "alpha": 10.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "weights": [
+        17.97679052243364,
+        4.423175613637236,
+        -2.8864940029544477,
+        -3.2923676144855114,
+        -2.0207327394756964,
+        -4.820742640898695,
+        6.841475380374296,
+        -4.820742640898686,
+        29.826009436642543,
+        -11.84486469392498,
+        -13.160402101818995
+      ],
+      "training_fit_metrics": {
+        "mae": 14.112709830989038,
+        "rmse": 25.619975812090487,
+        "mape": 243.29181260006555,
+        "r2": 0.5422013157218649,
+        "median_ape": 157.3180864447964,
+        "max_ape": 1835.981658446779
+      }
+    }
+  },
+  "training_date": "2026-09-10T09:59:05.994292+00:00",
+  "scientific_status": "exploratory_research_guidance_only_source_group_validation_does_not_support_cross_paper_generalization",
+  "limitations": [
+    "The primary model excludes rows missing Current, Voltage, or TON rather than imputing process variables.",
+    "TOFF, rotation, dielectric, coating, and reference material properties are retained as provenance/context, not model features, because they are incomplete or confounded across source groups.",
+    "Leave-one-source-out diagnostics are poor; this artifact must not be presented as a general cross-paper or production prediction model.",
+    "User experimental Data_sheet.csv remains quarantined and was not used.",
+    "scikit-learn, xgboost, joblib, and shap were unavailable in the bundled local runtime; dependency-free regression candidates were evaluated."
+  ]
+}

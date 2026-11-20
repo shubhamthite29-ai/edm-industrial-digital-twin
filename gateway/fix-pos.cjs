@@ -1,0 +1,1 @@
+const { SerialPort } = require('serialport'); const port = new SerialPort({ path: 'COM6', baudRate: 115200 }); port.on('open', () => { port.write(JSON.stringify({ type: 'toolhead.command', payload: { command: 'SET_POSITION', position_mm: 0 } }) + '\n', () => { console.log('Sent reset command'); setTimeout(() => process.exit(0), 1000); }); });

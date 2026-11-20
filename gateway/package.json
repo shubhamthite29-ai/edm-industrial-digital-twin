@@ -6,9 +6,11 @@
   "description": "Lightweight WebSocket gateway for the EDM Digital Twin React dashboard and Unity 6 editor.",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "serial:toolhead": "node toolhead-serial-bridge.js"
   },
   "dependencies": {
+    "serialport": "12.0.0",
     "ws": "^8.18.0"
   },
   "engines": {

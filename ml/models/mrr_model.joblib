@@ -1,0 +1,583 @@
+{
+  "target": "mrr",
+  "selected": {
+    "model": "linear_regression",
+    "alpha": 0.0,
+    "config": "research_supported_core",
+    "config_label": "Research-supported process and material categories",
+    "status": "ok",
+    "random_split": {
+      "mae": 7.017925789963152,
+      "rmse": 9.148074593627358,
+      "mape": 219.94635564381193,
+      "r2": 0.32675473953260104,
+      "median_ape": 103.92601066026441,
+      "max_ape": 1031.2366048242093,
+      "validation_samples": 17,
+      "groups": 0
+    },
+    "grouped_by_source": {
+      "mae": 55.85127749986155,
+      "rmse": 69.14209502535768,
+      "mape": 1376.876813879029,
+      "r2": -1.1042424001106137,
+      "median_ape": 436.1640004819195,
+      "max_ape": 12117.266099474533,
+      "validation_samples": 87,
+      "groups": 3,
+      "status": "ok"
+    },
+    "grouped_by_material_electrode": {
+      "mae": 52.94636917368595,
+      "rmse": 66.05382427335424,
+      "mape": 1302.873325519933,
+      "r2": -0.9204660382983727,
+      "median_ape": 333.8464642736732,
+      "max_ape": 12117.266099474533,
+      "validation_samples": 87,
+      "groups": 5,
+      "status": "ok"
+    },
+    "leave_one_material_out": {
+      "mae": 55.85127749986155,
+      "rmse": 69.14209502535768,
+      "mape": 1376.876813879029,
+      "r2": -1.1042424001106137,
+      "median_ape": 436.1640004819195,
+      "max_ape": 12117.266099474533,
+      "validation_samples": 87,
+      "groups": 3,
+      "status": "ok"
+    },
+    "validation_samples": 87
+  },
+  "candidates": [
+    {
+      "model": "linear_regression",
+      "alpha": 0.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 7.017925789963152,
+        "rmse": 9.148074593627358,
+        "mape": 219.94635564381193,
+        "r2": 0.32675473953260104,
+        "median_ape": 103.92601066026441,
+        "max_ape": 1031.2366048242093,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 55.85127749986155,
+        "rmse": 69.14209502535768,
+        "mape": 1376.876813879029,
+        "r2": -1.1042424001106137,
+        "median_ape": 436.1640004819195,
+        "max_ape": 12117.266099474533,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 52.94636917368595,
+        "rmse": 66.05382427335424,
+        "mape": 1302.873325519933,
+        "r2": -0.9204660382983727,
+        "median_ape": 333.8464642736732,
+        "max_ape": 12117.266099474533,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 55.85127749986155,
+        "rmse": 69.14209502535768,
+        "mape": 1376.876813879029,
+        "r2": -1.1042424001106137,
+        "median_ape": 436.1640004819195,
+        "max_ape": 12117.266099474533,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    },
+    {
+      "model": "ridge_regression",
+      "alpha": 0.1,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 6.859102981556795,
+        "rmse": 8.962567232389114,
+        "mape": 207.17176276013788,
+        "r2": 0.3537824277110029,
+        "median_ape": 103.10612267296182,
+        "max_ape": 967.2329086604501,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 88.10738458441232,
+        "rmse": 92.42066372009819,
+        "mape": 2617.0949061268225,
+        "r2": -2.7596625306872578,
+        "median_ape": 932.6860158944861,
+        "max_ape": 21455.4409852763,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 61.07141326704135,
+        "rmse": 75.90450091447136,
+        "mape": 2286.7855090482467,
+        "r2": -1.535979602580007,
+        "median_ape": 173.19240327673128,
+        "max_ape": 21455.4409852763,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 88.10738458441232,
+        "rmse": 92.42066372009819,
+        "mape": 2617.0949061268225,
+        "r2": -2.7596625306872578,
+        "median_ape": 932.6860158944861,
+        "max_ape": 21455.4409852763,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    },
+    {
+      "model": "ridge_regression",
+      "alpha": 1.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 6.385949473398773,
+        "rmse": 8.507139106933122,
+        "mape": 119.18434834512243,
+        "r2": 0.41778823247358277,
+        "median_ape": 73.78038337550022,
+        "max_ape": 456.6684086967116,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 85.52410665956906,
+        "rmse": 90.0607688938408,
+        "mape": 2476.9645645636347,
+        "r2": -2.570113299196933,
+        "median_ape": 935.9979887743918,
+        "max_ape": 20482.37247904923,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 57.80619792440284,
+        "rmse": 73.14717210077576,
+        "mape": 2139.723574635894,
+        "r2": -1.3550806250119827,
+        "median_ape": 166.2001876551252,
+        "max_ape": 20482.37247904923,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 85.52410665956906,
+        "rmse": 90.0607688938408,
+        "mape": 2476.9645645636347,
+        "r2": -2.570113299196933,
+        "median_ape": 935.9979887743918,
+        "max_ape": 20482.37247904923,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    },
+    {
+      "model": "ridge_regression",
+      "alpha": 10.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 14.474334063108158,
+        "rmse": 16.556757930673882,
+        "mape": 508.3013147525163,
+        "r2": -1.2052839095605075,
+        "median_ape": 193.4687796831457,
+        "max_ape": 2095.541028126549,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 71.28918671518669,
+        "rmse": 78.6217551500153,
+        "mape": 1785.1784226736038,
+        "r2": -1.720797172165859,
+        "median_ape": 720.2515396344671,
+        "max_ape": 15637.066403625908,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 45.06782250380323,
+        "rmse": 61.4288973276077,
+        "mape": 1477.805021083848,
+        "r2": -0.6609483872349591,
+        "median_ape": 248.03079910718867,
+        "max_ape": 15637.066403625908,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 71.28918671518669,
+        "rmse": 78.6217551500153,
+        "mape": 1785.1784226736038,
+        "r2": -1.720797172165859,
+        "median_ape": 720.2515396344671,
+        "max_ape": 15637.066403625908,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    },
+    {
+      "model": "polynomial_ridge",
+      "alpha": 1.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 6.457553799203033,
+        "rmse": 8.23906924796764,
+        "mape": 185.37064995658682,
+        "r2": 0.45390246471523044,
+        "median_ape": 104.37396212817525,
+        "max_ape": 952.2402766782108,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 123.77706338531566,
+        "rmse": 148.3702303244797,
+        "mape": 4822.14703057703,
+        "r2": -8.689564092449682,
+        "median_ape": 913.8076130793376,
+        "max_ape": 61565.76476134117,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 94.45857588007416,
+        "rmse": 137.55634830638795,
+        "mape": 4465.358977003198,
+        "r2": -7.328599418313358,
+        "median_ape": 192.88898533046103,
+        "max_ape": 61565.76476134117,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 123.77706338531566,
+        "rmse": 148.3702303244797,
+        "mape": 4822.14703057703,
+        "r2": -8.689564092449682,
+        "median_ape": 913.8076130793376,
+        "max_ape": 61565.76476134117,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    },
+    {
+      "model": "polynomial_ridge",
+      "alpha": 10.0,
+      "config": "research_supported_core",
+      "config_label": "Research-supported process and material categories",
+      "status": "ok",
+      "random_split": {
+        "mae": 11.922181129442988,
+        "rmse": 14.162500714849523,
+        "mape": 375.2802300397256,
+        "r2": -0.6135922522641795,
+        "median_ape": 123.76393991441871,
+        "max_ape": 1562.981911572553,
+        "validation_samples": 17,
+        "groups": 0
+      },
+      "grouped_by_source": {
+        "mae": 185.0541879868617,
+        "rmse": 313.1109043741525,
+        "mape": 9008.03956537026,
+        "r2": -42.15261147896922,
+        "median_ape": 846.6222594178543,
+        "max_ape": 167190.8173481277,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "grouped_by_material_electrode": {
+        "mae": 158.52475242330772,
+        "rmse": 309.20323192933205,
+        "mape": 8692.913831117254,
+        "r2": -41.08223016994465,
+        "median_ape": 237.76272080378908,
+        "max_ape": 167190.8173481277,
+        "validation_samples": 87,
+        "groups": 5,
+        "status": "ok"
+      },
+      "leave_one_material_out": {
+        "mae": 185.0541879868617,
+        "rmse": 313.1109043741525,
+        "mape": 9008.03956537026,
+        "r2": -42.15261147896922,
+        "median_ape": 846.6222594178543,
+        "max_ape": 167190.8173481277,
+        "validation_samples": 87,
+        "groups": 3,
+        "status": "ok"
+      },
+      "validation_samples": 87
+    }
+  ],
+  "unavailable_candidates": [
+    {
+      "model": "Random Forest",
+      "reason": "scikit-learn is not installed in the local runtime."
+    },
+    {
+      "model": "Extra Trees",
+      "reason": "scikit-learn is not installed in the local runtime."
+    },
+    {
+      "model": "Gradient Boosting",
+      "reason": "scikit-learn is not installed in the local runtime."
+    },
+    {
+      "model": "HistGradientBoosting",
+      "reason": "scikit-learn is not installed in the local runtime."
+    },
+    {
+      "model": "SVR",
+      "reason": "scikit-learn is not installed in the local runtime."
+    },
+    {
+      "model": "MLP",
+      "reason": "scikit-learn is not installed in the local runtime and 84 rows is small for ANN claims."
+    },
+    {
+      "model": "XGBoost",
+      "reason": "xgboost is not installed in the local runtime."
+    }
+  ],
+  "preprocessor": {
+    "numeric_features": [
+      "current_A",
+      "voltage_V",
+      "ton_us"
+    ],
+    "categorical_features": [
+      "workpiece_material",
+      "electrode_material"
+    ],
+    "numeric_medians": {
+      "current_A": 20.0,
+      "voltage_V": 45.0,
+      "ton_us": 150.0
+    },
+    "numeric_means": {
+      "current_A": 19.482758620689655,
+      "voltage_V": 46.03448275862069,
+      "ton_us": 331.60919540229884
+    },
+    "numeric_stds": {
+      "current_A": 8.408892486515807,
+      "voltage_V": 9.101532365438691,
+      "ton_us": 416.20307146518485
+    },
+    "categories": {
+      "workpiece_material": [
+        "Aluminium 6061",
+        "Ti-6Al-4V",
+        "Waspaloy"
+      ],
+      "electrode_material": [
+        "Aluminium",
+        "Brass",
+        "Copper",
+        "Graphite"
+      ]
+    }
+  },
+  "model": {
+    "model_type": "linear_regression",
+    "alpha": 0.0,
+    "config": "research_supported_core",
+    "config_label": "Research-supported process and material categories",
+    "weights": [
+      39.9187834952265,
+      3.5477333790270835,
+      0.18887863428490337,
+      0.6199002463117913,
+      102.49424865581912,
+      -20.183641401722195,
+      -42.391823758870245,
+      -20.183641401722202,
+      12.799891632316177,
+      22.593329132316267,
+      24.709204132316188
+    ],
+    "training_fit_metrics": {
+      "mae": 5.7881719469433985,
+      "rmse": 7.9742356300286446,
+      "mape": 126.765330073681,
+      "r2": 0.9720109068887917,
+      "median_ape": 48.238943564131766,
+      "max_ape": 1189.6682188677544
+    }
+  },
+  "domain": {
+    "numeric": {
+      "current_A": {
+        "min": 10.0,
+        "max": 40.0
+      },
+      "voltage_V": {
+        "min": 30.0,
+        "max": 60.0
+      },
+      "ton_us": {
+        "min": 50.0,
+        "max": 1500.0
+      }
+    },
+    "categorical": {
+      "workpiece_material": [
+        "Aluminium 6061",
+        "Ti-6Al-4V",
+        "Waspaloy"
+      ],
+      "electrode_material": [
+        "Aluminium",
+        "Brass",
+        "Copper",
+        "Graphite"
+      ]
+    },
+    "material_electrode_combinations": {
+      "Aluminium 6061|Copper": 9,
+      "Ti-6Al-4V|Aluminium": 30,
+      "Waspaloy|Brass": 16,
+      "Waspaloy|Copper": 16,
+      "Waspaloy|Graphite": 16
+    },
+    "by_combination": {
+      "Aluminium 6061|Copper": {
+        "current_A": {
+          "min": 10.0,
+          "max": 20.0
+        },
+        "voltage_V": {
+          "min": 40.0,
+          "max": 50.0
+        },
+        "ton_us": {
+          "min": 50.0,
+          "max": 200.0
+        }
+      },
+      "Ti-6Al-4V|Aluminium": {
+        "current_A": {
+          "min": 10.0,
+          "max": 40.0
+        },
+        "voltage_V": {
+          "min": 40.0,
+          "max": 55.0
+        },
+        "ton_us": {
+          "min": 100.0,
+          "max": 1500.0
+        }
+      },
+      "Waspaloy|Brass": {
+        "current_A": {
+          "min": 10.0,
+          "max": 25.0
+        },
+        "voltage_V": {
+          "min": 30.0,
+          "max": 60.0
+        },
+        "ton_us": {
+          "min": 50.0,
+          "max": 200.0
+        }
+      },
+      "Waspaloy|Copper": {
+        "current_A": {
+          "min": 10.0,
+          "max": 25.0
+        },
+        "voltage_V": {
+          "min": 30.0,
+          "max": 60.0
+        },
+        "ton_us": {
+          "min": 50.0,
+          "max": 200.0
+        }
+      },
+      "Waspaloy|Graphite": {
+        "current_A": {
+          "min": 10.0,
+          "max": 25.0
+        },
+        "voltage_V": {
+          "min": 30.0,
+          "max": 60.0
+        },
+        "ton_us": {
+          "min": 50.0,
+          "max": 200.0
+        }
+      }
+    }
+  },
+  "row_count": 87,
+  "source_ids": [
+    "S2021_AL6061_PMEDM",
+    "S2021_SHIRGUPPIKAR_TI64_AL",
+    "S2022_WASPALOY_ELECTRODES"
+  ],
+  "materials": [
+    "Aluminium 6061",
+    "Ti-6Al-4V",
+    "Waspaloy"
+  ],
+  "electrodes": [
+    "Aluminium",
+    "Brass",
+    "Copper",
+    "Graphite"
+  ]
+}

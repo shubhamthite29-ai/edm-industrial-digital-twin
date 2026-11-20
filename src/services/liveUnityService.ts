@@ -2,7 +2,7 @@ import { machineCommandService } from "../Machine/MachineCommandService";
 import { cameraCommandService } from "../Machine/CameraCommandService";
 import { realtimeClient, type GatewayMessage } from "../Realtime/RealtimeClient";
 import { useTwinStore } from "../store/useTwinStore";
-import { onLocalUnityMessage, onUnityWebGLReadyChange, sendLocalUnityMessage } from "./unityWebGLBridge";
+import { onUnityWebGLReadyChange } from "./unityWebGLBridge";
 import type { CameraView, MachineLifecycleState, MachineParameters } from "../types/twin";
 
 let initialized = false;
@@ -134,8 +134,6 @@ export function initializeLiveUnityService() {
     useTwinStore.getState().setUnityWebGLReady(ready);
   });
 
-  onLocalUnityMessage(handleMessage);
-
   realtimeClient.onStatusChange((status) => {
     useTwinStore.getState().setConnectionStatus(status);
     if (status === "connected") {
@@ -159,9 +157,7 @@ export function initializeLiveUnityService() {
 }
 
 function sendLiveMessage(message: GatewayMessage) {
-  const gatewaySent = realtimeClient.getStatus() === "connected" ? realtimeClient.send(message) : false;
-  const localSent = sendLocalUnityMessage(message);
-  return gatewaySent || localSent;
+  return realtimeClient.getStatus() === "connected" && realtimeClient.send(message);
 }
 
 function sendMachineCommand(command: string) {

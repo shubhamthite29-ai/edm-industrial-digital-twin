@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 export const CLIENT_ROLES = {
   REACT: "react",
   UNITY: "unity",
+  ESP32: "esp32",
   UNKNOWN: "unknown",
 };
 
@@ -17,6 +18,11 @@ export const MESSAGE_TYPES = {
   MACHINE_PARAMETERS_PATCH: "machine.parameters.patch",
   CAMERA_COMMAND: "camera.command",
   UNITY_STATE: "unity.state",
+  TOOLHEAD_COMMAND: "toolhead.command",
+  TOOLHEAD_SET_POSITION: "toolhead.set_position",
+  TOOLHEAD_SET_SPEED: "toolhead.set_speed",
+  TOOLHEAD_CALIBRATION: "toolhead.calibration",
+  TOOLHEAD_STATE: "toolhead.state",
 };
 
 const ROUTES = {
@@ -24,6 +30,11 @@ const ROUTES = {
   [MESSAGE_TYPES.MACHINE_PARAMETERS_PATCH]: [CLIENT_ROLES.UNITY],
   [MESSAGE_TYPES.CAMERA_COMMAND]: [CLIENT_ROLES.UNITY],
   [MESSAGE_TYPES.UNITY_STATE]: [CLIENT_ROLES.REACT],
+  [MESSAGE_TYPES.TOOLHEAD_COMMAND]: [CLIENT_ROLES.ESP32],
+  [MESSAGE_TYPES.TOOLHEAD_SET_POSITION]: [CLIENT_ROLES.ESP32],
+  [MESSAGE_TYPES.TOOLHEAD_SET_SPEED]: [CLIENT_ROLES.ESP32],
+  [MESSAGE_TYPES.TOOLHEAD_CALIBRATION]: [CLIENT_ROLES.ESP32],
+  [MESSAGE_TYPES.TOOLHEAD_STATE]: [CLIENT_ROLES.REACT, CLIENT_ROLES.UNITY],
 };
 
 export function parseJsonMessage(rawMessage) {
@@ -69,6 +80,7 @@ export function getRoleFromRequest(requestUrl) {
 
   if (role === CLIENT_ROLES.REACT) return CLIENT_ROLES.REACT;
   if (role === CLIENT_ROLES.UNITY) return CLIENT_ROLES.UNITY;
+  if (role === CLIENT_ROLES.ESP32) return CLIENT_ROLES.ESP32;
   return CLIENT_ROLES.UNKNOWN;
 }
 
@@ -77,6 +89,7 @@ export function getRoleFromHello(message) {
 
   if (role === CLIENT_ROLES.REACT) return CLIENT_ROLES.REACT;
   if (role === CLIENT_ROLES.UNITY) return CLIENT_ROLES.UNITY;
+  if (role === CLIENT_ROLES.ESP32) return CLIENT_ROLES.ESP32;
   return null;
 }
 

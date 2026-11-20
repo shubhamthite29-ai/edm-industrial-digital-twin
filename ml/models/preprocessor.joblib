@@ -1,0 +1,80 @@
+{
+  "mrr": {
+    "numeric_features": [
+      "current_A",
+      "voltage_V",
+      "ton_us"
+    ],
+    "categorical_features": [
+      "workpiece_material",
+      "electrode_material"
+    ],
+    "numeric_medians": {
+      "current_A": 20.0,
+      "voltage_V": 45.0,
+      "ton_us": 150.0
+    },
+    "numeric_means": {
+      "current_A": 19.482758620689655,
+      "voltage_V": 46.03448275862069,
+      "ton_us": 331.60919540229884
+    },
+    "numeric_stds": {
+      "current_A": 8.408892486515807,
+      "voltage_V": 9.101532365438691,
+      "ton_us": 416.20307146518485
+    },
+    "categories": {
+      "workpiece_material": [
+        "Aluminium 6061",
+        "Ti-6Al-4V",
+        "Waspaloy"
+      ],
+      "electrode_material": [
+        "Aluminium",
+        "Brass",
+        "Copper",
+        "Graphite"
+      ]
+    }
+  },
+  "twr": {
+    "numeric_features": [
+      "current_A",
+      "voltage_V",
+      "ton_us"
+    ],
+    "categorical_features": [
+      "workpiece_material",
+      "electrode_material"
+    ],
+    "numeric_medians": {
+      "current_A": 20.0,
+      "voltage_V": 45.0,
+      "ton_us": 150.0
+    },
+    "numeric_means": {
+      "current_A": 18.541666666666668,
+      "voltage_V": 45.625,
+      "ton_us": 249.30555555555554
+    },
+    "numeric_stds": {
+      "current_A": 7.473912964438374,
+      "voltage_V": 9.644280832585588,
+      "ton_us": 341.0047506547904
+    },
+    "categories": {
+      "workpiece_material": [
+        "Aluminium 6061",
+        "Ti-6Al-4V",
+        "Waspaloy"
+      ],
+      "electrode_material": [
+        "Aluminium",
+        "Brass",
+        "Copper",
+        "Graphite"
+      ]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+Model,Target,Features,MAE,RMSE,R2,Validation_Method,Selected
+linear_regression,MRR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,55.85127749986155,69.14209502535768,-1.1042424001106137,leave-one-source-out grouped validation,True
+ridge_regression,MRR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,88.10738458441232,92.42066372009819,-2.7596625306872578,leave-one-source-out grouped validation,False
+ridge_regression,MRR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,85.52410665956906,90.0607688938408,-2.570113299196933,leave-one-source-out grouped validation,False
+ridge_regression,MRR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,71.28918671518669,78.6217551500153,-1.720797172165859,leave-one-source-out grouped validation,False
+polynomial_ridge,MRR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,123.77706338531566,148.3702303244797,-8.689564092449682,leave-one-source-out grouped validation,False
+polynomial_ridge,MRR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,185.0541879868617,313.1109043741525,-42.15261147896922,leave-one-source-out grouped validation,False
+linear_regression,TWR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,40.86377782846583,72.00431562665186,-2.6160478046268536,leave-one-source-out grouped validation,False
+ridge_regression,TWR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,38.30680757167667,68.7334094106114,-2.2949807617328553,leave-one-source-out grouped validation,False
+ridge_regression,TWR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,37.86716424031316,68.03486524249351,-2.2283466904763567,leave-one-source-out grouped validation,False
+ridge_regression,TWR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,35.29140609163037,61.89240780769647,-1.6717256888470238,leave-one-source-out grouped validation,True
+polynomial_ridge,TWR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,248.01019615476395,754.461229132691,-396.000417062044,leave-one-source-out grouped validation,False
+polynomial_ridge,TWR,current_A; voltage_V; ton_us; workpiece_material; electrode_material,189.89620749484098,561.8479173288322,-219.16823460477974,leave-one-source-out grouped validation,False

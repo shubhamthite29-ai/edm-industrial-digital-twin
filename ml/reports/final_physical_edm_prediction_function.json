@@ -1,0 +1,121 @@
+{
+  "system_name": "EDM Digital Twin Prediction Function Specification",
+  "machine": "ELEKTRA PULS S-50 ZNC Die-Sinker EDM",
+  "deployed_model_version": "physical-edm-ensemble-v2.5.0",
+  "model_artifact": "src/data/ml/physical-experimental-model.json",
+  "inputs": {
+    "Ip": {
+      "unit": "A",
+      "type": "integer",
+      "min": 10.0,
+      "max": 40.0,
+      "description": "Discharge / Peak Current"
+    },
+    "Vg": {
+      "unit": "V",
+      "type": "integer",
+      "min": 40.0,
+      "max": 55.0,
+      "description": "Gap Voltage"
+    },
+    "Ton": {
+      "unit": "\u00b5s",
+      "type": "integer",
+      "min": 100.0,
+      "max": 1500.0,
+      "description": "Pulse ON Time"
+    },
+    "Toff": {
+      "unit": "\u00b5s",
+      "type": "float",
+      "min": 4.0,
+      "max": 12.0,
+      "description": "Pulse OFF Time"
+    }
+  },
+  "outputs": {
+    "MRR": {
+      "unit": "g/min",
+      "formula": "(W_wb - W_wa) / 10.0",
+      "description": "Material Removal Rate"
+    },
+    "TWR": {
+      "unit": "g/min",
+      "formula": "(W_tb - W_ta) / 10.0",
+      "description": "Tool Wear Rate"
+    }
+  },
+  "architecture": {
+    "model_type": "ExtraTreesRegressor Ensemble",
+    "n_estimators": 60,
+    "max_depth": 10,
+    "random_state": 174,
+    "inference_runtime": "Pure client-side recursive JSON decision-tree traversal (< 0.1 ms latency)"
+  },
+  "verified_metrics": {
+    "training_unique_conditions_pass_5pct": "44 / 44 (100.0%)",
+    "training_all_cuts_mrr_pass_5pct": "44 / 48 (91.7%)",
+    "training_all_cuts_twr_pass_5pct": "48 / 48 (100.0%)",
+    "out_of_fold_mrr_r2": 0.6681,
+    "out_of_fold_mrr_mae_g_per_min": 0.004369,
+    "out_of_fold_mrr_median_ape_pct": 25.77,
+    "out_of_fold_twr_r2": 0.1462,
+    "out_of_fold_twr_mae_g_per_min": 0.004192,
+    "out_of_fold_twr_median_ape_pct": 18.5,
+    "case_a_accuracy": {
+      "MRR_err_pct": 0.91,
+      "TWR_err_pct": 0.0,
+      "status": "PASSED"
+    },
+    "case_39_accuracy": {
+      "MRR_err_pct": 0.0,
+      "TWR_err_pct": 0.0,
+      "status": "PASSED"
+    }
+  },
+  "candidate_benchmark": {
+    "candidate_model": "Micro-Augmented Extra-Trees (w=0.00010)",
+    "out_of_fold_mrr_r2": 0.8293,
+    "out_of_fold_mrr_mae_g_per_min": 0.002832,
+    "out_of_fold_twr_r2": 0.4239,
+    "out_of_fold_twr_mae_g_per_min": 0.002515,
+    "twr_high_error_tail_reduction": "22 cuts -> 10 cuts (55% reduction)"
+  },
+  "noise_floor_limitations": {
+    "pair_1": {
+      "inputs": [
+        30,
+        55,
+        500,
+        5.0
+      ],
+      "cuts": [
+        8,
+        9
+      ],
+      "actual_mrr": [
+        0.0419,
+        0.0291
+      ],
+      "spread_pct": 36.1
+    },
+    "pair_2": {
+      "inputs": [
+        30,
+        45,
+        400,
+        7.0
+      ],
+      "cuts": [
+        45,
+        49
+      ],
+      "actual_mrr": [
+        0.0144,
+        0.0215
+      ],
+      "spread_pct": 39.6
+    },
+    "scientific_proof": "Deterministic single-valued models cannot simultaneously achieve <= 5% error on replicate pairs with 36-40% empirical variance."
+  }
+}

@@ -67,6 +67,7 @@ function percentLabel(value: number) {
 export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, cameraView }: UnityWebGLViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const unityRef = useRef<UnityInstance | null>(null);
+  const creatingRef = useRef(false);
   const mountedRef = useRef(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -101,6 +102,9 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
     setLoadState("loading");
     setMessage("Loading Unity WebGL...");
 
+    if (creatingRef.current || unityRef.current) return undefined;
+    creatingRef.current = true;
+
     loadScriptOnce(loaderUrl)
       .then(() => {
         if (!mountedRef.current || !canvas || unityRef.current) return;
@@ -111,7 +115,14 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
         });
       })
       .then((unityInstance) => {
-        if (!unityInstance || !mountedRef.current) return;
+        creatingRef.current = false;
+        if (!unityInstance) return;
+        if (!mountedRef.current) {
+          // The section was left during asynchronous startup. Release this
+          // player rather than leaving a second hidden WebGL instance alive.
+          unityInstance.Quit?.().catch(() => undefined);
+          return;
+        }
         unityRef.current = unityInstance;
         registerUnityWebGLInstance(unityInstance);
         setLoadProgress(1);
@@ -119,6 +130,7 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
         setMessage("Unity WebGL ready");
       })
       .catch((error: Error) => {
+        creatingRef.current = false;
         if (!mountedRef.current) return;
         setLoadState("error");
         setMessage(error.message);
@@ -136,7 +148,7 @@ export function UnityWebGLViewer({ connectionStatus, machineState, telemetry, ca
   const progress = telemetry.progressPercent || telemetry.cyclePercent || 0;
 
   return (
-    <div className="relative h-[340px] overflow-hidden rounded border border-plant-line bg-[#05070b]">
+    <div className="relative h-[420px] overflow-hidden rounded border border-plant-line bg-[#05070b] xl:h-[480px]">
       <canvas id="unity-canvas" ref={canvasRef} className="block h-full w-full bg-black outline-none" tabIndex={-1} />
 
       {loadState !== "ready" ? (
