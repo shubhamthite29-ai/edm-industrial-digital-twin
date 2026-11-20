@@ -14,7 +14,7 @@ import { PUBLISHED_DEMO_SAMPLES, PUBLISHED_PROJECT_METADATA } from "../src/data/
 import { resolveUserRole, normalizeAuthRole } from "../src/services/authService.ts";
 
 console.log("================================================================================");
-console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (14 TESTS)");
+console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (15 TESTS)");
 console.log("================================================================================");
 
 // -----------------------------------------------------------------------------
@@ -352,22 +352,88 @@ assert(appSource.includes('commandDisabled = dataMode === "live-unity" && connec
 
 // Verify responsive grid breakpoint for controls panel
 assert(appSource.includes('lg:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]'), "Grid must display controls beside Unity viewer on standard screens");
+console.log("✓ HOD & Administrator full parity on Unity Digital Twin and physical controls verified.");
 
-// Verify resolveUserRole accurately resolves HOD across all sources
-assert.equal(resolveUserRole("hod", null, null, "user@example.com"), "hod", "Database role 'hod' must resolve to hod");
+// -----------------------------------------------------------------------------
+// Test 15: Authoritative Role Resolution & Negative Privilege Escalation Rejection
+// -----------------------------------------------------------------------------
+console.log("\n[Test 15] Verifying Authoritative Role Resolution & Negative Security Invariants...");
+const authCode = fs.readFileSync(path.resolve("src/services/authService.ts"), "utf8");
+
+// A. Positive Tests: Administrator, HOD, Research, and Guest tested separately
+// 1. Administrator
+assert.equal(resolveUserRole("administrator", null, null, "user@example.com"), "administrator", "Database 'administrator' must resolve to administrator");
+assert.equal(resolveUserRole("admin", null, null, "user@example.com"), "administrator", "Database 'admin' alias must resolve to administrator");
+assert.equal(resolveUserRole(null, "administrator", null, "user@example.com"), "administrator", "Server app_metadata 'administrator' must resolve to administrator");
+const adminP = getRolePermissions("administrator");
+assert.equal(adminP.canControlPhysicalMachine, true, "Administrator must control physical machine");
+assert.equal(adminP.canManageUsers, true, "Administrator must manage users");
+assert.equal(adminP.canViewAuditLogs, true, "Administrator must view audit logs");
+
+// 2. HOD
+assert.equal(resolveUserRole("hod", null, null, "user@example.com"), "hod", "Database 'hod' must resolve to hod");
 assert.equal(resolveUserRole("HOD", null, null, "user@example.com"), "hod", "Case-insensitive 'HOD' must resolve to hod");
 assert.equal(resolveUserRole("Head of Department", null, null, "user@example.com"), "hod", "Alias 'Head of Department' must resolve to hod");
-assert.equal(resolveUserRole(null, "hod", null, "user@example.com"), "hod", "app_metadata 'hod' must resolve to hod");
-assert.equal(resolveUserRole(null, null, "hod", "user@example.com"), "hod", "user_metadata 'hod' must resolve to hod");
-assert.equal(resolveUserRole(null, null, null, "hod@gmail.com"), "hod", "Email hod@gmail.com must resolve to hod");
-assert.equal(resolveUserRole(null, null, null, "hod@ritindia.edu"), "hod", "Email hod@ritindia.edu must resolve to hod");
-assert.equal(resolveUserRole(null, null, null, "hod.mechatronics@gmail.com"), "hod", "Email hod.mechatronics@... must resolve to hod");
-assert.equal(resolveUserRole(null, null, null, "shirguppikar@gmail.com"), "hod", "Dr. Shirguppikar email must resolve to hod");
-assert.equal(resolveUserRole(null, null, null, "admin@gmail.com"), "administrator", "Email admin@gmail.com must resolve to administrator");
-assert.equal(resolveUserRole("research", null, null, "researcher@gmail.com"), "research", "Research user must resolve to research");
+assert.equal(resolveUserRole(null, "hod", null, "user@example.com"), "hod", "Server app_metadata 'hod' must resolve to hod");
+const hodP = getRolePermissions("hod");
+assert.equal(hodP.canControlPhysicalMachine, true, "HOD must control physical machine");
+assert.equal(hodP.canManageUsers, true, "HOD must manage users");
+assert.equal(hodP.canViewAuditLogs, true, "HOD must view audit logs");
 
-console.log("✓ HOD full parity on Unity Digital Twin, role resolution across all sources, and control visibility verified.");
+// 3. Research Team
+assert.equal(resolveUserRole("research", null, null, "user@example.com"), "research", "Database 'research' must resolve to research");
+assert.equal(resolveUserRole("researcher", null, null, "user@example.com"), "research", "Database 'researcher' must resolve to research");
+assert.equal(resolveUserRole(null, "research", null, "user@example.com"), "research", "Server app_metadata 'research' must resolve to research");
+assert.equal(resolveUserRole(null, null, null, "user@example.com"), "research", "Unassigned authenticated user defaults to research");
+const researchP = getRolePermissions("research");
+assert.equal(researchP.canControlPhysicalMachine, false, "Research team cannot control physical machine");
+assert.equal(researchP.canManageUsers, false, "Research team cannot manage users");
+assert.equal(researchP.canViewAuditLogs, false, "Research team cannot view audit logs");
+
+// 4. Guest
+assert.equal(resolveUserRole("guest", null, null, "user@example.com"), "guest", "Database 'guest' must resolve to guest");
+assert.equal(resolveUserRole(null, "guest", null, "user@example.com"), "guest", "Server app_metadata 'guest' must resolve to guest");
+const guestP = getRolePermissions("guest");
+assert.equal(guestP.canControlPhysicalMachine, false, "Guest cannot control physical machine");
+assert.equal(guestP.canManageUsers, false, "Guest cannot manage users");
+assert.equal(guestP.canEditMlParameters, false, "Guest cannot edit ML parameters");
+
+// B. Negative Tests: User-editable metadata (user_metadata) MUST NEVER grant Administrator or HOD
+assert.notEqual(resolveUserRole(null, null, "administrator", "attacker@example.com"), "administrator", "user_metadata MUST NOT grant administrator");
+assert.equal(resolveUserRole(null, null, "administrator", "attacker@example.com"), "research", "user_metadata administrator must default to non-privileged research");
+assert.notEqual(resolveUserRole(null, null, "admin", "attacker@example.com"), "administrator", "user_metadata admin must not grant administrator");
+assert.notEqual(resolveUserRole(null, null, "hod", "attacker@example.com"), "hod", "user_metadata MUST NOT grant hod");
+assert.equal(resolveUserRole(null, null, "hod", "attacker@example.com"), "research", "user_metadata hod must default to non-privileged research");
+assert.notEqual(resolveUserRole(null, null, "Head of Department", "attacker@example.com"), "hod", "user_metadata Head of Department must not grant hod");
+
+// C. Negative Tests: Email addresses MUST NEVER grant or infer Administrator or HOD
+assert.notEqual(resolveUserRole(null, null, null, "admin@ritindia.edu"), "administrator", "Email admin@ritindia.edu must NOT grant administrator");
+assert.equal(resolveUserRole(null, null, null, "admin@ritindia.edu"), "research", "Email admin@ritindia.edu without DB role must remain research");
+assert.notEqual(resolveUserRole(null, null, null, "admin@gmail.com"), "administrator", "Email admin@gmail.com must NOT grant administrator");
+assert.notEqual(resolveUserRole(null, null, null, "administrator@example.com"), "administrator", "Email administrator@... must NOT grant administrator");
+assert.notEqual(resolveUserRole(null, null, null, "hod@ritindia.edu"), "hod", "Email hod@ritindia.edu must NOT grant hod");
+assert.equal(resolveUserRole(null, null, null, "hod@ritindia.edu"), "research", "Email hod@ritindia.edu without DB role must remain research");
+assert.notEqual(resolveUserRole(null, null, null, "hod@gmail.com"), "hod", "Email hod@gmail.com must NOT grant hod");
+assert.notEqual(resolveUserRole(null, null, null, "hod.mechatronics@gmail.com"), "hod", "Email hod.mechatronics@... must NOT grant hod");
+assert.notEqual(resolveUserRole(null, null, null, "shailesh@ritindia.edu"), "hod", "Email shailesh@... must NOT grant hod");
+assert.notEqual(resolveUserRole(null, null, null, "shirguppikar@gmail.com"), "hod", "Email shirguppikar@... must NOT grant hod");
+
+// D. Negative Tests: Combined spoofing vectors (privileged email + user_metadata) MUST FAIL
+assert.notEqual(resolveUserRole(null, null, "administrator", "admin@ritindia.edu"), "administrator", "Combined email + user_metadata must not grant administrator");
+assert.equal(resolveUserRole(null, null, "administrator", "admin@ritindia.edu"), "research", "Combined administrator spoof must remain research");
+assert.notEqual(resolveUserRole(null, null, "hod", "hod@ritindia.edu"), "hod", "Combined email + user_metadata must not grant hod");
+assert.equal(resolveUserRole(null, null, "hod", "hod@ritindia.edu"), "research", "Combined hod spoof must remain research");
+
+// E. Source Code Security Audit: Verify elimination of email heuristics & enforcement of database verification
+assert(!authCode.includes('cleanEmail.includes("shirguppikar")'), "authService must not contain email heuristic for shirguppikar");
+assert(!authCode.includes('cleanEmail.includes("shailesh")'), "authService must not contain email heuristic for shailesh");
+assert(!authCode.includes('localPart === "hod"'), "authService must not contain email heuristic for hod");
+assert(!authCode.includes('localPart === "admin"'), "authService must not contain email heuristic for admin");
+assert(authCode.includes("Authorization error:"), "authService must raise explicit Authorization error when database verification fails");
+assert(authCode.includes("Privileged access denied"), "authService must deny privileged access when database role is not found");
+
+console.log("✓ Authoritative role resolution verified and all negative privilege escalation vectors blocked.");
 
 console.log("\n================================================================================");
-console.log("ALL 14 AUTHENTICATION, SECURITY, WEB SERIAL & UI VALIDATION TESTS PASSED PERFECTLY!");
+console.log("ALL 15 AUTHENTICATION, SECURITY, WEB SERIAL & UI VALIDATION TESTS PASSED PERFECTLY!");
 console.log("================================================================================");

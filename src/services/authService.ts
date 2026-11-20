@@ -33,56 +33,50 @@ export function normalizeAuthRole(role: unknown): AuthRole | null {
 }
 
 /**
- * Multi-layered role resolution hierarchy ensuring that HOD and Administrator
- * accounts are never incorrectly demoted or defaulted to research team.
- * Priority: Database (user_roles) -> app_metadata -> user_metadata -> Email heuristic -> Default.
+ * Authoritative Role Resolution
+ *
+ * Strict Security Rules:
+ * 1. public.user_roles is the primary authoritative source for all user roles.
+ * 2. Trusted server-controlled app_metadata.role may be used if present (set only by backend service_role / Supabase Admin).
+ * 3. Never trust user-editable user_metadata for privileged roles (administrator or hod).
+ * 4. Never infer Administrator or HOD from an email address (e.g. hod@, admin@, shailesh@, etc.).
+ * 5. If authoritative lookup yields no role, privileged access is strictly denied.
  */
 export function resolveUserRole(
   dbRole: unknown,
-  appMetadataRole: unknown,
-  userMetadataRole: unknown,
-  email: string | undefined
+  appMetadataRole?: unknown,
+  userMetadataRole?: unknown,
+  _email?: string
 ): AuthRole {
-  // 1. Explicit database role from public.user_roles takes top priority
+  // 1. Authoritative: public.user_roles takes primary priority
   const fromDb = normalizeAuthRole(dbRole);
-  if (fromDb) return fromDb;
+  if (fromDb) {
+    return fromDb;
+  }
 
-  // 2. Supabase app_metadata role (set via Supabase Admin API / JWT claims)
+  // 2. Server-controlled app_metadata (cannot be modified by end users or client SDK)
   const fromApp = normalizeAuthRole(appMetadataRole);
-  if (fromApp) return fromApp;
+  if (fromApp) {
+    return fromApp;
+  }
 
-  // 3. Supabase user_metadata role (set during user creation in Supabase Auth UI)
-  const fromUser = normalizeAuthRole(userMetadataRole);
-  if (fromUser) return fromUser;
-
-  // 4. Deterministic email resolution for administrative and institutional accounts
-  if (email) {
-    const cleanEmail = email.trim().toLowerCase();
-    const localPart = cleanEmail.split("@")[0] || "";
-    // Check if account is HOD (e.g. hod@..., hod.mechatronics@..., or Dr. Shailesh Shirguppikar)
-    if (
-      localPart === "hod" ||
-      localPart.startsWith("hod.") ||
-      localPart.startsWith("hod_") ||
-      localPart.endsWith(".hod") ||
-      cleanEmail.includes("shirguppikar") ||
-      cleanEmail.includes("shailesh")
-    ) {
-      return "hod";
-    }
-    // Check if account is Administrator (e.g. admin@...)
-    if (
-      localPart === "admin" ||
-      localPart.startsWith("admin.") ||
-      localPart.startsWith("admin_") ||
-      localPart.endsWith(".admin") ||
-      cleanEmail.includes("administrator")
-    ) {
-      return "administrator";
+  // 3. User-editable metadata check: NEVER allow user_metadata to grant 'administrator' or 'hod'
+  if (userMetadataRole) {
+    const fromUser = normalizeAuthRole(userMetadataRole);
+    if (fromUser === "administrator" || fromUser === "hod") {
+      console.warn(
+        `[Security Alert] Untrusted user_metadata attempted to claim privileged role '${fromUser}'. Privilege escalation rejected.`
+      );
+      // Deny elevation to privileged roles
+    } else if (fromUser === "guest") {
+      return "guest";
     }
   }
 
-  // 5. Default authenticated user role
+  // 4. Email address: Strictly prohibited from granting or inferring Administrator or HOD privileges.
+  // Regardless of email address (hod@..., admin@..., shailesh@..., etc.), email is never an authorization source.
+
+  // 5. Default fallback: Non-privileged "research" role (never administrator or hod)
   return "research";
 }
 
@@ -198,29 +192,50 @@ class AuthService {
           },
         });
 
-        if (roleResponse.ok) {
-          const roleRows = await roleResponse.json();
-          if (Array.isArray(roleRows) && roleRows.length > 0) {
-            dbRole = roleRows[0].role;
-            dbDisplayName = roleRows[0].display_name;
-            dbDepartment = roleRows[0].department;
-          }
+        if (!roleResponse.ok) {
+          console.error(`[AuthService] user_roles query failed with HTTP status: ${roleResponse.status}`);
+          throw new Error(
+            `Authorization error: Unable to verify account permissions from database (HTTP ${roleResponse.status}). Privileged access denied.`
+          );
+        }
+
+        const roleRows = await roleResponse.json();
+        if (Array.isArray(roleRows) && roleRows.length > 0) {
+          dbRole = roleRows[0].role;
+          dbDisplayName = roleRows[0].display_name;
+          dbDepartment = roleRows[0].department;
         } else {
-          console.warn("[AuthService] user_roles query returned status:", roleResponse.status);
+          // Check trusted server-controlled app_metadata (cannot be set by client SDK)
+          const serverRole = normalizeAuthRole(data.user.app_metadata?.role);
+          if (serverRole) {
+            dbRole = serverRole;
+          } else {
+            console.warn(`[AuthService] No authorized role assigned in public.user_roles for user ID ${data.user.id}`);
+            throw new Error(
+              "Authorization error: No role assignment found in public.user_roles for this account. Privileged access denied. Please contact an Administrator or HOD."
+            );
+          }
         }
       } catch (roleErr) {
-        console.warn("[AuthService] Error querying user_roles table:", roleErr);
+        if (roleErr instanceof Error && roleErr.message.startsWith("Authorization error:")) {
+          throw roleErr;
+        }
+        console.error("[AuthService] Error querying user_roles table:", roleErr);
+        throw new Error(
+          "Authorization error: Database role verification failed. Privileged access denied."
+        );
       }
 
-      // Robust multi-layered role resolution (Database -> app_metadata -> user_metadata -> Email heuristic)
+      // Authoritative role resolution: strictly public.user_roles or server app_metadata.
+      // NEVER pass user_metadata or email heuristics for privileged role elevation.
       const assignedRole = resolveUserRole(
         dbRole,
         data.user.app_metadata?.role,
-        data.user.user_metadata?.role,
-        cleanEmail
+        undefined, // user_metadata is untrusted for privileged roles
+        undefined  // email address is untrusted for privileged roles
       );
 
-      console.log(`[AuthService] Authenticated ${cleanEmail} -> Role: ${assignedRole}`);
+      console.log(`[AuthService] Authenticated ${cleanEmail} -> Authoritative Role: ${assignedRole}`);
 
       const session: AuthSession = {
         token: data.access_token,
@@ -401,14 +416,15 @@ class AuthService {
 
       const parsed: AuthSession = JSON.parse(raw);
       if (parsed && parsed.expiresAt && Date.now() < parsed.expiresAt) {
-        // Heal any previously misresolved role (e.g. stale "research" cached for HOD account)
-        const healedRole = resolveUserRole(
-          parsed.user.role === "research" ? undefined : parsed.user.role,
+        // Validate cached session: ensure privileged roles are strictly authoritative
+        // user_metadata and email heuristics are never trusted for role elevation
+        const validatedRole = resolveUserRole(
+          parsed.user.role,
           (parsed.user as unknown as Record<string, unknown>)?.app_metadata,
-          (parsed.user as unknown as Record<string, unknown>)?.user_metadata,
-          parsed.user.email
+          undefined, // never trust user_metadata for role elevation
+          undefined  // never trust email heuristics
         );
-        parsed.user.role = healedRole;
+        parsed.user.role = validatedRole;
         this.currentSession = parsed;
       } else {
         sessionStorage.removeItem(SESSION_STORAGE_KEY);
