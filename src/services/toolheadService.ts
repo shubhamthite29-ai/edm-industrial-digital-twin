@@ -1,6 +1,8 @@
 import { realtimeClient, type GatewayMessage } from "../Realtime/RealtimeClient";
+import { useAuthStore } from "../store/useAuthStore";
 import { useToolheadStore } from "../store/useToolheadStore";
 import { SIMULATION_CALIBRATION, clampSimulationSpeedMmPerSec, clampToolheadPosition, type ToolheadDirection, type ToolheadMotion, type ToolheadPhysicalState, type ToolheadPositionSource } from "../toolhead/toolheadTypes";
+import { webSerialService } from "./webSerialService";
 
 let initialized = false;
 let simulationTimer: number | null = null;
@@ -84,9 +86,22 @@ function runSimulation(direction: ToolheadDirection, targetPositionMm: number) {
 }
 
 function sendPhysical(type: string, payload: Record<string, unknown>) {
+  const permissions = useAuthStore.getState().permissions;
+  if (!permissions.canControlPhysicalMachine) {
+    useToolheadStore.getState().setError("Unauthorized: Physical machine control requires Administrator or HOD privileges.");
+    return false;
+  }
+
+  // 1. Direct Browser Web Serial (USB) priority
+  if (webSerialService.isConnected()) {
+    webSerialService.send({ type, payload });
+    return true;
+  }
+
+  // 2. Native WebSocket gateway fallback
   const state = useToolheadStore.getState();
-  if (!state.esp32Connected) {
-    state.setError("ESP32 controller is not connected.");
+  if (!state.esp32Connected && !realtimeClient.isConnected()) {
+    state.setError("ESP32 controller is not connected via USB or gateway.");
     return false;
   }
   const sent = realtimeClient.send({ type, payload });
@@ -144,12 +159,40 @@ function handleToolheadState(payload: Record<string, unknown>, receivedAt?: stri
 export function initializeToolheadService() {
   if (initialized) return;
   initialized = true;
+
+  // Listen to WebSocket gateway
   realtimeClient.onMessage((message: GatewayMessage) => {
     if (message.type === "toolhead.state" && message.payload) handleToolheadState(message.payload, message.timestamp);
     if (message.type === "client.status" && message.payload?.role === "esp32" && message.payload.status === "disconnected") {
-      // Role registration only proves that a bridge socket exists. A physical
-      // connection is declared exclusively after a fresh toolhead.state packet.
-      useToolheadStore.getState().setConnection(false);
+      // If Web Serial is not active, mark connection lost
+      if (!webSerialService.isConnected()) {
+        useToolheadStore.getState().setConnection(false);
+      }
+    }
+  });
+
+  // Listen to Direct Web Serial packets
+  webSerialService.onPacket((packet) => {
+    if (packet.type === "toolhead.state" && packet.payload) {
+      handleToolheadState(packet.payload, packet.timestamp);
+    }
+  });
+
+  // Listen to Web Serial connection state changes
+  webSerialService.onStatusChange((status, errorMsg) => {
+    const store = useToolheadStore.getState();
+    if (status === "connected") {
+      store.setConnection(true);
+      store.applyTelemetry({
+        controllerTransport: "usb_serial",
+        error: null,
+      });
+    } else if (status === "disconnected") {
+      if (store.mode === "physical" && !realtimeClient.isConnected()) {
+        store.setConnection(false);
+      }
+    } else if (status === "error" && errorMsg) {
+      store.setError(errorMsg);
     }
   });
 }
@@ -168,6 +211,11 @@ export function setToolheadMode(mode: "simulation" | "physical") {
 
 export function requestPhysicalToolheadStatus() {
   const state = useToolheadStore.getState();
+  if (webSerialService.isConnected()) {
+    webSerialService.send({ type: "toolhead.command", payload: { command: "PING" } });
+    webSerialService.send({ type: "toolhead.command", payload: { command: "GET_STATE" } });
+    return true;
+  }
   const pingSent = realtimeClient.send({ type: "toolhead.command", payload: { command: "PING" } });
   const stateSent = realtimeClient.send({ type: "toolhead.command", payload: { command: "GET_STATE" } });
   if (!pingSent && !stateSent) state.setError("Gateway connection is unavailable; unable to request ESP32 state.");

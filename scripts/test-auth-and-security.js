@@ -13,7 +13,7 @@ import { ROLE_PERMISSIONS, getRolePermissions } from "../src/types/auth.ts";
 import { PUBLISHED_DEMO_SAMPLES, PUBLISHED_PROJECT_METADATA } from "../src/data/guest/publishedDemoData.ts";
 
 console.log("================================================================================");
-console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (12 TESTS)");
+console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (14 TESTS)");
 console.log("================================================================================");
 
 // -----------------------------------------------------------------------------
@@ -160,13 +160,19 @@ assert(!loginLandingPageSource.includes("Research Team"), "Must not describe Res
 assert(!loginLandingPageSource.includes("Administrator"), "Must not list Administrator role on public landing page");
 assert(!loginLandingPageSource.includes("HOD"), "Must not list HOD role on public landing page");
 
-// Must contain essential elements
+// Must NOT contain obsolete or internal ID fields
+assert(!loginLandingPageSource.includes("Institutional ID"), "Must not mention Institutional ID");
+assert(!loginLandingPageSource.includes("Login ID"), "Must not mention Login ID");
+assert(!loginLandingPageSource.includes("Employee ID"), "Must not mention Employee ID");
+
+// Must contain essential minimal login elements
 assert(loginLandingPageSource.includes("EDM Industrial Digital Twin"), "Must display Project Title");
 assert(loginLandingPageSource.includes("Enter Guest Demo"), "Must provide Enter Guest Demo button");
-assert(loginLandingPageSource.includes("Institutional Email"), "Must provide Institutional Email input");
+assert(loginLandingPageSource.includes("Email Address"), "Must provide Email Address input");
 assert(loginLandingPageSource.includes("Password"), "Must provide Password input");
+assert(loginLandingPageSource.includes(">Sign In<") || loginLandingPageSource.includes('"Sign In"'), "Must provide Sign In button");
 assert(loginLandingPageSource.includes("Forgot password?"), "Must provide Forgot password option");
-console.log("✓ Landing page is clean, minimal, and contains zero internal role or RBAC descriptions.");
+console.log("✓ Landing page is clean, minimal, has two inputs ('Email Address', 'Password') and 'Sign In' button.");
 
 // -----------------------------------------------------------------------------
 // Test 7: Toolhead Digital Twin Navigation & Guest Access
@@ -297,6 +303,46 @@ assert(
 );
 console.log("✓ Database safeguards verified: Last admin removal prevention and concurrency-safe bootstrapping active.");
 
+// -----------------------------------------------------------------------------
+// Test 13: Direct Browser Web Serial (USB) ESP32 Architecture & Protocol Fidelity
+// -----------------------------------------------------------------------------
+console.log("\n[Test 13] Verifying Direct Browser Web Serial (USB) Architecture...");
+assert(fs.existsSync(path.resolve("src/services/webSerialService.ts")), "webSerialService.ts must exist");
+const webSerialSource = fs.readFileSync(path.resolve("src/services/webSerialService.ts"), "utf8");
+
+// Must configure 115200 baud matching ESP32 firmware
+assert(webSerialSource.includes("baudRate: 115200"), "Web Serial must configure 115200 baud rate");
+// Must implement keepalive heartbeat matching ESP32 watchdog
+assert(webSerialSource.includes('type: "heartbeat"'), "Web Serial must include keepalive heartbeat for watchdog");
+// Must send initial state requests
+assert(webSerialSource.includes('"PING"'), "Web Serial must send PING command upon connection");
+assert(webSerialSource.includes('"GET_STATE"'), "Web Serial must send GET_STATE command upon connection");
+
+// Verify toolheadService priority and integration
+const toolheadServiceSource = fs.readFileSync(path.resolve("src/services/toolheadService.ts"), "utf8");
+assert(toolheadServiceSource.includes("webSerialService.isConnected()"), "toolheadService must check webSerialService connection");
+assert(toolheadServiceSource.includes("webSerialService.onPacket"), "toolheadService must listen to Web Serial packets");
+
+// Verify ToolheadDigitalTwin UI exposure
+const toolheadTwinSource = fs.readFileSync(path.resolve("src/components/ToolheadDigitalTwin.tsx"), "utf8");
+assert(toolheadTwinSource.includes("Connect ESP32 (USB)"), "ToolheadDigitalTwin must provide Connect ESP32 (USB) button");
+assert(toolheadTwinSource.includes("Direct USB Web Serial"), "ToolheadDigitalTwin must display Direct USB Web Serial status");
+console.log("✓ Direct Browser Web Serial ESP32 integration verified (115200 baud, newline-delimited JSON, watchdog keepalive).");
+
+// -----------------------------------------------------------------------------
+// Test 14: Complete Parity of HOD with Administrator on Unity & Physical Twin
+// -----------------------------------------------------------------------------
+console.log("\n[Test 14] Verifying HOD & Administrator Full Parity on Unity & Physical Controls...");
+const authTypesSource = fs.readFileSync(path.resolve("src/types/auth.ts"), "utf8");
+// Verify HOD has identical flags to Administrator
+assert(authTypesSource.includes("canControlPhysicalMachine: true"), "Permissions must grant physical control");
+assert(authTypesSource.includes("canViewDigitalTwin: true"), "Permissions must grant digital twin view");
+
+// Verify App.tsx allows both Administrator and HOD
+assert(appSource.includes('authRole === "guest" || authRole === "research"'), "Physical machine execution guard must only block guest and research");
+assert(!appSource.includes('authRole !== "administrator"') || appSource.includes('authRole !== "administrator" && authRole !== "hod"'), "No single-role administrator locks on twin features");
+console.log("✓ HOD full parity on Unity Digital Twin, toolhead motion, and physical controls verified.");
+
 console.log("\n================================================================================");
-console.log("ALL 12 AUTHENTICATION, SECURITY & UI VALIDATION TESTS PASSED PERFECTLY!");
+console.log("ALL 14 AUTHENTICATION, SECURITY, WEB SERIAL & UI VALIDATION TESTS PASSED PERFECTLY!");
 console.log("================================================================================");

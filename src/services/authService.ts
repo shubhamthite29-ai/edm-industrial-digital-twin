@@ -157,7 +157,7 @@ class AuthService {
   async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
-      throw new Error("Please enter your registered institutional email address.");
+      throw new Error("Please enter your registered email address.");
     }
 
     if (!this.isSupabaseConfigured()) {

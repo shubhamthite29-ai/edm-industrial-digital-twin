@@ -1,12 +1,13 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
-import { ArrowDown, ArrowUp, Box, Cpu, Moon, Radio, Square, Sun } from "lucide-react";
+import { ArrowDown, ArrowUp, Box, Cpu, Moon, Radio, Square, Sun, Usb } from "lucide-react";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Box3, Group, MathUtils, Mesh, MeshStandardMaterial, PerspectiveCamera, Quaternion, Vector3, type Material } from "three";
 import { Panel } from "./Panel";
-import { moveToolheadDown, moveToolheadUp, setToolheadMode, setToolheadPosition, setToolheadSpeed, stopToolhead } from "../services/toolheadService";
+import { armToolheadController, moveToolheadDown, moveToolheadUp, setToolheadMode, setToolheadPosition, setToolheadSpeed, stopToolhead } from "../services/toolheadService";
 import { useToolheadStore } from "../store/useToolheadStore";
 import { useAuthStore } from "../store/useAuthStore";
+import { webSerialService, type WebSerialStatus } from "../services/webSerialService";
 
 const componentRoot = `${import.meta.env.BASE_URL}models/toolhead/edm-toolhead.glb`;
 const TOOLHEAD_THEME_KEY = "edm-toolhead-theme";
@@ -283,6 +284,16 @@ export function ToolheadDigitalTwin() {
   const [theme, setTheme] = useState<ToolheadTheme>("dark");
   const permissions = useAuthStore((state) => state.permissions);
   const canControlPhysical = permissions.canControlPhysicalMachine;
+  const [serialStatus, setSerialStatus] = useState<WebSerialStatus>(webSerialService.getStatus());
+  const [serialError, setSerialError] = useState<string | null>(webSerialService.getLastError());
+  const isSerialSupported = useMemo(() => webSerialService.isSupported(), []);
+
+  useEffect(() => {
+    return webSerialService.onStatusChange((status, err) => {
+      setSerialStatus(status);
+      setSerialError(err ?? null);
+    });
+  }, []);
 
   useEffect(() => {
     if (!canControlPhysical && mode !== "simulation") {
@@ -384,12 +395,82 @@ export function ToolheadDigitalTwin() {
         </div>
         <div className="toolhead-control-column">
           {canControlPhysical ? (
-            <div className="toolhead-mode-switch">
-              {(["simulation", "physical"] as const).map((nextMode) => (
-                <button key={nextMode} className={mode === nextMode ? "is-active" : ""} onClick={() => setToolheadMode(nextMode)} type="button">
-                  <span>{nextMode === "simulation" ? "Simulation" : "Physical"}</span><small>{nextMode === "simulation" ? "3D only" : "ESP32 control"}</small>
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="toolhead-mode-switch">
+                {(["simulation", "physical"] as const).map((nextMode) => (
+                  <button key={nextMode} className={mode === nextMode ? "is-active" : ""} onClick={() => setToolheadMode(nextMode)} type="button">
+                    <span>{nextMode === "simulation" ? "Simulation" : "Physical"}</span><small>{nextMode === "simulation" ? "3D only" : "ESP32 control"}</small>
+                  </button>
+                ))}
+              </div>
+
+              {mode === "physical" ? (
+                <div className="rounded-lg border border-plant-cyan/40 bg-plant-deck/80 p-3 space-y-2.5 shadow-md">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold uppercase tracking-wider text-plant-muted flex items-center gap-1.5">
+                      <Usb size={14} className="text-plant-cyan" /> Direct USB Web Serial
+                    </span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                      serialStatus === "connected"
+                        ? "bg-plant-green/20 text-plant-green border border-plant-green/40"
+                        : serialStatus === "connecting"
+                        ? "bg-plant-amber/20 text-plant-amber border border-plant-amber/40"
+                        : "bg-plant-muted/20 text-plant-muted border border-plant-line"
+                    }`}>
+                      {serialStatus === "connected" ? "115200 Baud" : serialStatus}
+                    </span>
+                  </div>
+
+                  {!isSerialSupported ? (
+                    <div className="text-[11px] text-plant-amber leading-relaxed">
+                      Web Serial API is supported in Google Chrome and Microsoft Edge on HTTPS.
+                    </div>
+                  ) : serialStatus === "connected" ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-plant-muted">
+                        <span>Device: <strong className="text-plant-text">{controllerChip ?? "ESP32-D0WD-V3"}</strong></span>
+                        <span>Servo: <strong className={calibration.servoArmed ? "text-plant-green" : "text-plant-amber"}>{calibration.servoArmed ? "Armed" : "Disarmed"}</strong></span>
+                      </div>
+                      <div className="flex gap-2">
+                        {!calibration.servoArmed ? (
+                          <button
+                            type="button"
+                            onClick={() => armToolheadController()}
+                            className="flex-1 rounded bg-plant-amber px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-plant-void hover:bg-plant-amber/90 transition shadow"
+                          >
+                            Arm Controller
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => webSerialService.disconnect()}
+                          className="flex-1 rounded border border-plant-red/60 bg-plant-red/10 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-plant-red hover:bg-plant-red/20 transition"
+                        >
+                          Disconnect USB
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={serialStatus === "connecting"}
+                      onClick={async () => {
+                        await webSerialService.connect();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 rounded bg-plant-cyan px-3 py-2 text-xs font-bold uppercase tracking-wider text-plant-void hover:bg-plant-cyan/90 transition shadow disabled:opacity-50"
+                    >
+                      <Usb size={14} />
+                      {serialStatus === "connecting" ? "Connecting..." : "Connect ESP32 (USB)"}
+                    </button>
+                  )}
+
+                  {serialError ? (
+                    <div className="text-[10px] text-plant-red leading-tight">
+                      {serialError}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="rounded border border-plant-cyan/40 bg-plant-cyan/10 p-2.5 text-center text-xs">

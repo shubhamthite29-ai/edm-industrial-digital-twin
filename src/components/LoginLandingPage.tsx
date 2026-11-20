@@ -100,7 +100,7 @@ export const LoginLandingPage: React.FC = () => {
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-plant-muted" htmlFor="login-email">
-                Institutional Email
+                Email Address
               </label>
               <div className="mt-1.5 flex items-center rounded-lg border border-plant-line bg-plant-void px-3 py-2 focus-within:border-plant-cyan">
                 <Mail size={16} className="text-plant-muted shrink-0" />
@@ -158,7 +158,7 @@ export const LoginLandingPage: React.FC = () => {
               disabled={status === "loading"}
               className="mt-2 flex h-11 w-full items-center justify-center rounded-lg bg-plant-cyan font-semibold uppercase tracking-wider text-plant-void shadow-lg transition hover:bg-plant-cyan/90 disabled:opacity-50"
             >
-              {status === "loading" ? "Authenticating..." : "Sign In to Dashboard"}
+              {status === "loading" ? "Authenticating..." : "Sign In"}
             </button>
           </form>
 
@@ -187,7 +187,7 @@ export const LoginLandingPage: React.FC = () => {
               Password Recovery
             </h3>
             <p className="mt-1 text-xs text-plant-muted leading-relaxed">
-              Enter your registered institutional email to receive recovery instructions.
+              Enter your registered email address to receive recovery instructions.
             </p>
 
             {resetMessage ? (
@@ -199,7 +199,7 @@ export const LoginLandingPage: React.FC = () => {
             <form onSubmit={handlePasswordReset} className="mt-4 space-y-3">
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-plant-muted" htmlFor="reset-email">
-                  Registered Institutional Email
+                  Email Address
                 </label>
                 <input
                   id="reset-email"

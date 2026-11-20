@@ -71,6 +71,10 @@ export class RealtimeClient {
     return this.status;
   }
 
+  isConnected() {
+    return this.status === "connected";
+  }
+
   connect() {
     // Physical gateway connection is restricted to Administrator and HOD
     const session = authService.getCurrentSession();
