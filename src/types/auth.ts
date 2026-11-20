@@ -27,6 +27,8 @@ export interface RolePermissions {
   canAccessGatewayWs: boolean;
   canManageUsers: boolean;
   canAccessSettings: boolean;
+  canViewAuditLogs: boolean;
+  canEditPrivateDatasets: boolean;
 }
 
 export const ROLE_PERMISSIONS: Record<AuthRole, RolePermissions> = {
@@ -42,6 +44,8 @@ export const ROLE_PERMISSIONS: Record<AuthRole, RolePermissions> = {
     canAccessGatewayWs: true,
     canManageUsers: true,
     canAccessSettings: true,
+    canViewAuditLogs: true,
+    canEditPrivateDatasets: true,
   },
   hod: {
     canViewDashboard: true,
@@ -55,6 +59,8 @@ export const ROLE_PERMISSIONS: Record<AuthRole, RolePermissions> = {
     canAccessGatewayWs: true,
     canManageUsers: true,
     canAccessSettings: true,
+    canViewAuditLogs: true,
+    canEditPrivateDatasets: true,
   },
   research: {
     canViewDashboard: true,
@@ -68,6 +74,8 @@ export const ROLE_PERMISSIONS: Record<AuthRole, RolePermissions> = {
     canAccessGatewayWs: false,
     canManageUsers: false,
     canAccessSettings: false,
+    canViewAuditLogs: false,
+    canEditPrivateDatasets: false,
   },
   guest: {
     canViewDashboard: true,
@@ -81,6 +89,8 @@ export const ROLE_PERMISSIONS: Record<AuthRole, RolePermissions> = {
     canAccessGatewayWs: false,
     canManageUsers: false,
     canAccessSettings: false,
+    canViewAuditLogs: false,
+    canEditPrivateDatasets: false,
   },
 };
 
@@ -97,8 +107,6 @@ export function roleDisplayLabel(role: AuthRole): string {
     case "research":
       return "Research Team";
     case "guest":
-      return "Guest Demo";
-    default:
-      return "Guest";
+      return "Guest Evaluation";
   }
 }

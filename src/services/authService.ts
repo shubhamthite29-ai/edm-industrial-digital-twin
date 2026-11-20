@@ -211,6 +211,62 @@ class AuthService {
   }
 
   /**
+   * Update or promote/demote a user role. Accessible by Administrator and HOD.
+   * Last administrator protection is enforced by database trigger.
+   */
+  async updateUserRole(targetUserId: string, newRole: AuthRole, displayName?: string): Promise<void> {
+    if (!this.isSupabaseConfigured()) throw new Error("Supabase is not configured.");
+    const session = this.getCurrentSession();
+    if (!session || (session.user.role !== "administrator" && session.user.role !== "hod")) {
+      throw new Error("Unauthorized: Only Administrator and HOD can modify user roles.");
+    }
+
+    const payload: Record<string, unknown> = { role: newRole };
+    if (displayName) payload.display_name = displayName;
+
+    const response = await fetch(`${this.supabaseUrl}/rest/v1/user_roles?user_id=eq.${targetUserId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: this.supabaseAnonKey,
+        Authorization: `Bearer ${session.token}`,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to update user role.");
+    }
+  }
+
+  /**
+   * Revoke a user role. Accessible by Administrator and HOD.
+   * Last administrator protection is enforced by database trigger.
+   */
+  async deleteUserRole(targetUserId: string): Promise<void> {
+    if (!this.isSupabaseConfigured()) throw new Error("Supabase is not configured.");
+    const session = this.getCurrentSession();
+    if (!session || (session.user.role !== "administrator" && session.user.role !== "hod")) {
+      throw new Error("Unauthorized: Only Administrator and HOD can delete user roles.");
+    }
+
+    const response = await fetch(`${this.supabaseUrl}/rest/v1/user_roles?user_id=eq.${targetUserId}`, {
+      method: "DELETE",
+      headers: {
+        apikey: this.supabaseAnonKey,
+        Authorization: `Bearer ${session.token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to delete user role.");
+    }
+  }
+
+  /**
    * Terminate active session and clear storage.
    */
   signOut(): void {

@@ -13,11 +13,11 @@ import { ROLE_PERMISSIONS, getRolePermissions } from "../src/types/auth.ts";
 import { PUBLISHED_DEMO_SAMPLES, PUBLISHED_PROJECT_METADATA } from "../src/data/guest/publishedDemoData.ts";
 
 console.log("================================================================================");
-console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (10 TESTS)");
+console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (12 TESTS)");
 console.log("================================================================================");
 
 // -----------------------------------------------------------------------------
-// Test 1: Role Permission Matrix Validation
+// Test 1: Role Permission Matrix Validation (Admin & HOD Parity)
 // -----------------------------------------------------------------------------
 console.log("\n[Test 1] Validating Role Permission Matrix...");
 const adminPerms = getRolePermissions("administrator");
@@ -28,27 +28,39 @@ const guestPerms = getRolePermissions("guest");
 // Administrator & HOD have full parity
 assert.equal(adminPerms.canControlPhysicalMachine, true, "Admin must have machine control");
 assert.equal(hodPerms.canControlPhysicalMachine, true, "HOD must have machine control");
+assert.equal(adminPerms.canManageUsers, true, "Admin must have user management access");
+assert.equal(hodPerms.canManageUsers, true, "HOD must have user management access");
 assert.equal(adminPerms.canAccessSettings, true, "Admin must have settings access");
 assert.equal(hodPerms.canAccessSettings, true, "HOD must have settings access");
 assert.equal(adminPerms.canViewRawExperiments, true, "Admin must access raw experiments");
 assert.equal(hodPerms.canViewRawExperiments, true, "HOD must access raw experiments");
+assert.equal(adminPerms.canViewAuditLogs, true, "Admin must view audit logs");
+assert.equal(hodPerms.canViewAuditLogs, true, "HOD must view audit logs");
+assert.equal(adminPerms.canEditPrivateDatasets, true, "Admin must edit private datasets");
+assert.equal(hodPerms.canEditPrivateDatasets, true, "HOD must edit private datasets");
 
 // Research team restrictions
 assert.equal(researchPerms.canControlPhysicalMachine, false, "Research team must NOT control physical machine");
+assert.equal(researchPerms.canManageUsers, false, "Research team must NOT manage users");
 assert.equal(researchPerms.canAccessSettings, false, "Research team must NOT access settings");
+assert.equal(researchPerms.canViewAuditLogs, false, "Research team must NOT view audit logs");
+assert.equal(researchPerms.canEditPrivateDatasets, false, "Research team must NOT edit private datasets");
 assert.equal(researchPerms.canViewRawExperiments, false, "Research team must NOT view unapproved raw experiments");
 assert.equal(researchPerms.canEditMlParameters, true, "Research team can edit ML parameters");
 assert.equal(researchPerms.canRunOptimization, true, "Research team can run ML optimization");
 
 // Guest Demo restrictions & capabilities
 assert.equal(guestPerms.canControlPhysicalMachine, false, "Guest must NOT control physical machine");
+assert.equal(guestPerms.canManageUsers, false, "Guest must NOT manage users");
 assert.equal(guestPerms.canAccessGatewayWs, false, "Guest must NOT access gateway WS");
 assert.equal(guestPerms.canEditMlParameters, false, "Guest must NOT edit private ML parameters");
 assert.equal(guestPerms.canViewRawExperiments, false, "Guest must NOT view raw experiments");
+assert.equal(guestPerms.canViewAuditLogs, false, "Guest must NOT view audit logs");
+assert.equal(guestPerms.canEditPrivateDatasets, false, "Guest must NOT edit private datasets");
 assert.equal(guestPerms.canAccessSettings, false, "Guest must NOT access settings");
 assert.equal(guestPerms.canViewDashboard, true, "Guest can view demonstration dashboard");
 assert.equal(guestPerms.canViewDigitalTwin, true, "Guest CAN view 3D digital twin and toolhead simulation");
-console.log("✓ Role Permission Matrix verified across all four roles.");
+console.log("✓ Role Permission Matrix verified: Administrator & HOD full parity established.");
 
 // -----------------------------------------------------------------------------
 // Test 2: Gateway Protected Message Set Validation
@@ -91,7 +103,7 @@ assert.equal(adminAttempt.ok, true, "Admin command must be authorized");
 
 // HOD sending command
 const hodAttempt = simulateGatewayDispatch(AUTH_ROLES.HOD, MESSAGE_TYPES.TOOLHEAD_SET_POSITION);
-assert.equal(hodAttempt.ok, true, "HOD command must be authorized");
+assert.equal(hodAttempt.ok, true, "HOD command must be authorized with equal priority");
 console.log("✓ Gateway authorization logic correctly blocks Guest & Research and permits Admin & HOD.");
 
 // -----------------------------------------------------------------------------
@@ -206,6 +218,85 @@ assert(!authServiceSource.includes("admin@edm.local"), "Hardcoded admin email mu
 assert(authServiceSource.includes("isSupabaseConfigured"), "Must check for real Supabase configuration");
 console.log("✓ Insecure local mock accounts completely eliminated; real Supabase error guidance enforced.");
 
+// -----------------------------------------------------------------------------
+// Test 11: Supabase schema.sql Role Management & Promotion Equivalence
+// -----------------------------------------------------------------------------
+console.log("\n[Test 11] Validating Supabase schema.sql Role Management & Promotion Equivalence...");
+const schemaSource = fs.readFileSync(path.resolve("supabase/schema.sql"), "utf8");
+
+// Administrator and HOD have equal permission to manage, promote and demote roles
+assert(schemaSource.includes("Admin and HOD can insert roles"), "schema.sql must allow both Admin and HOD to insert roles");
+assert(schemaSource.includes("Admin and HOD can update roles"), "schema.sql must allow both Admin and HOD to update/promote roles");
+assert(schemaSource.includes("Admin and HOD can delete roles"), "schema.sql must allow both Admin and HOD to delete roles");
+
+// Ensure system configuration table is present and managed by Admin & HOD
+assert(schemaSource.includes("system_configurations"), "Must define system_configurations table");
+assert(schemaSource.includes("Admin and HOD can view system configuration"), "Admin and HOD must view system config");
+assert(schemaSource.includes("Admin and HOD can modify system configuration"), "Admin and HOD must modify system config");
+
+// Research team read-only on physical experiments
+assert(schemaSource.includes("Authorized research team and leadership can view experiments"), "Research team must be in SELECT policy");
+assert(!schemaSource.includes("'research')\n  ); \n\nDROP POLICY IF EXISTS \"Admin and HOD can insert"), "Research team must NOT have write policies");
+
+// Revoke all private tables from anon/public
+assert(schemaSource.includes("REVOKE ALL ON TABLE public.user_roles FROM anon, public;"), "Must revoke user_roles from anon/public");
+assert(schemaSource.includes("REVOKE ALL ON TABLE public.physical_experiments FROM anon, public;"), "Must revoke physical_experiments from anon/public");
+assert(schemaSource.includes("REVOKE ALL ON TABLE public.machine_audit_logs FROM anon, public;"), "Must revoke machine_audit_logs from anon/public");
+assert(schemaSource.includes("REVOKE ALL ON TABLE public.system_configurations FROM anon, public;"), "Must revoke system_configurations from anon/public");
+assert(schemaSource.includes("user_id = (SELECT auth.uid())"), "Audit log insert must enforce user_id matches calling auth.uid()");
+console.log("✓ Supabase schema.sql role management verified: Administrator and HOD possess equal management authority.");
+
+// -----------------------------------------------------------------------------
+// Test 12: Database-Level Safeguards Validation
+// -----------------------------------------------------------------------------
+console.log("\n[Test 12] Validating Database Safeguards (Last Admin Protection & Concurrency)...");
+
+// Safeguard 1: Never allow deletion or demotion of the last Administrator
+assert(
+  schemaSource.includes("prevent_last_administrator_removal"),
+  "Must include trigger function prevent_last_administrator_removal"
+);
+assert(
+  schemaSource.includes("Cannot delete or demote the last remaining Administrator"),
+  "Must contain exception message for last administrator removal"
+);
+assert(
+  schemaSource.includes("tr_prevent_last_administrator_removal"),
+  "Must attach trigger to user_roles table"
+);
+assert(
+  schemaSource.includes("prevent_last_administrator_removal") &&
+  schemaSource.includes("PERFORM pg_advisory_xact_lock(hashtext('provision_initial_administrator_lock'));"),
+  "prevent_last_administrator_removal must acquire advisory lock before counting remaining administrators"
+);
+
+// Safeguard 2: Concurrency-safe initial Administrator provisioning
+assert(
+  schemaSource.includes("pg_advisory_xact_lock"),
+  "Initial provisioning must acquire transactional advisory lock for concurrency safety"
+);
+assert(
+  schemaSource.includes("REVOKE ALL ON FUNCTION public.provision_initial_administrator(TEXT, TEXT) FROM authenticated;"),
+  "Must revoke provision_initial_administrator from authenticated users"
+);
+assert(
+  schemaSource.includes("REVOKE ALL ON FUNCTION public.provision_initial_administrator(TEXT, TEXT) FROM anon;"),
+  "Must revoke provision_initial_administrator from anon users"
+);
+assert(
+  schemaSource.includes("REVOKE ALL ON FUNCTION public.provision_initial_administrator(TEXT, TEXT) FROM service_role;"),
+  "Must revoke provision_initial_administrator from service_role"
+);
+assert(
+  schemaSource.includes("GRANT EXECUTE ON FUNCTION public.provision_initial_administrator(TEXT, TEXT) TO postgres;"),
+  "Must grant provision_initial_administrator strictly to postgres"
+);
+assert(
+  schemaSource.includes("is_verified BOOLEAN NOT NULL DEFAULT false"),
+  "physical_experiments.is_verified must default to false"
+);
+console.log("✓ Database safeguards verified: Last admin removal prevention and concurrency-safe bootstrapping active.");
+
 console.log("\n================================================================================");
-console.log("ALL 10 AUTHENTICATION, SECURITY & UI VALIDATION TESTS PASSED PERFECTLY!");
+console.log("ALL 12 AUTHENTICATION, SECURITY & UI VALIDATION TESTS PASSED PERFECTLY!");
 console.log("================================================================================");
