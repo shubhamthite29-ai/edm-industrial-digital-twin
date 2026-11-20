@@ -6,6 +6,7 @@ import { Box3, Group, MathUtils, Mesh, MeshStandardMaterial, PerspectiveCamera, 
 import { Panel } from "./Panel";
 import { moveToolheadDown, moveToolheadUp, setToolheadMode, setToolheadPosition, setToolheadSpeed, stopToolhead } from "../services/toolheadService";
 import { useToolheadStore } from "../store/useToolheadStore";
+import { useAuthStore } from "../store/useAuthStore";
 
 const componentRoot = `${import.meta.env.BASE_URL}models/toolhead/edm-toolhead.glb`;
 const TOOLHEAD_THEME_KEY = "edm-toolhead-theme";
@@ -280,6 +281,14 @@ export function ToolheadDigitalTwin() {
   const [loadedParts, setLoadedParts] = useState<ToolheadPartKey[]>([]);
   const [positionDraft, setPositionDraft] = useState(String(positionMm));
   const [theme, setTheme] = useState<ToolheadTheme>("dark");
+  const permissions = useAuthStore((state) => state.permissions);
+  const canControlPhysical = permissions.canControlPhysicalMachine;
+
+  useEffect(() => {
+    if (!canControlPhysical && mode !== "simulation") {
+      setToolheadMode("simulation");
+    }
+  }, [canControlPhysical, mode]);
 
   useEffect(() => { setPositionDraft(positionMm.toFixed(2)); }, [positionMm]);
   useEffect(() => {
@@ -374,13 +383,20 @@ export function ToolheadDigitalTwin() {
           </div>
         </div>
         <div className="toolhead-control-column">
-          <div className="toolhead-mode-switch">
-            {(["simulation", "physical"] as const).map((nextMode) => (
-              <button key={nextMode} className={mode === nextMode ? "is-active" : ""} onClick={() => setToolheadMode(nextMode)} type="button">
-                <span>{nextMode === "simulation" ? "Simulation" : "Physical"}</span><small>{nextMode === "simulation" ? "3D only" : "ESP32 control"}</small>
-              </button>
-            ))}
-          </div>
+          {canControlPhysical ? (
+            <div className="toolhead-mode-switch">
+              {(["simulation", "physical"] as const).map((nextMode) => (
+                <button key={nextMode} className={mode === nextMode ? "is-active" : ""} onClick={() => setToolheadMode(nextMode)} type="button">
+                  <span>{nextMode === "simulation" ? "Simulation" : "Physical"}</span><small>{nextMode === "simulation" ? "3D only" : "ESP32 control"}</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded border border-plant-cyan/40 bg-plant-cyan/10 p-2.5 text-center text-xs">
+              <span className="font-bold uppercase tracking-wider text-plant-cyan">3D Simulation Mode</span>
+              <p className="mt-0.5 text-[10px] text-plant-muted">Interactive browser-local CAD kinematics & positioning</p>
+            </div>
+          )}
           <section className="toolhead-position-readout">
             <span>Current position</span>
             <strong>{positionMm.toFixed(2)} <small>mm</small></strong>

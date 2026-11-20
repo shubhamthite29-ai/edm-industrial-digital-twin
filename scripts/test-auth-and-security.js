@@ -1,4 +1,6 @@
 import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
 import {
   AUTH_ROLES,
   CLIENT_ROLES,
@@ -8,10 +10,10 @@ import {
   createAck,
 } from "../gateway/protocol.js";
 import { ROLE_PERMISSIONS, getRolePermissions } from "../src/types/auth.ts";
-import { PUBLISHED_DEMO_SAMPLES } from "../src/data/guest/publishedDemoData.ts";
+import { PUBLISHED_DEMO_SAMPLES, PUBLISHED_PROJECT_METADATA } from "../src/data/guest/publishedDemoData.ts";
 
 console.log("================================================================================");
-console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE");
+console.log("RUNNING EDM DIGITAL TWIN AUTHENTICATION & SECURITY VALIDATION SUITE (10 TESTS)");
 console.log("================================================================================");
 
 // -----------------------------------------------------------------------------
@@ -38,13 +40,14 @@ assert.equal(researchPerms.canViewRawExperiments, false, "Research team must NOT
 assert.equal(researchPerms.canEditMlParameters, true, "Research team can edit ML parameters");
 assert.equal(researchPerms.canRunOptimization, true, "Research team can run ML optimization");
 
-// Guest Demo restrictions
+// Guest Demo restrictions & capabilities
 assert.equal(guestPerms.canControlPhysicalMachine, false, "Guest must NOT control physical machine");
 assert.equal(guestPerms.canAccessGatewayWs, false, "Guest must NOT access gateway WS");
 assert.equal(guestPerms.canEditMlParameters, false, "Guest must NOT edit private ML parameters");
 assert.equal(guestPerms.canViewRawExperiments, false, "Guest must NOT view raw experiments");
 assert.equal(guestPerms.canAccessSettings, false, "Guest must NOT access settings");
 assert.equal(guestPerms.canViewDashboard, true, "Guest can view demonstration dashboard");
+assert.equal(guestPerms.canViewDigitalTwin, true, "Guest CAN view 3D digital twin and toolhead simulation");
 console.log("✓ Role Permission Matrix verified across all four roles.");
 
 // -----------------------------------------------------------------------------
@@ -130,6 +133,79 @@ for (const sample of PUBLISHED_DEMO_SAMPLES) {
 }
 console.log("✓ Published demonstration benchmarks verified with high accuracy (< 2% error) on Ti-6Al-4V.");
 
+// -----------------------------------------------------------------------------
+// Test 6: Minimalist Landing Page (No Leaked RBAC or Internal Architecture)
+// -----------------------------------------------------------------------------
+console.log("\n[Test 6] Verifying Minimalist Landing Page Architecture...");
+const loginLandingPageSource = fs.readFileSync(
+  path.resolve("src/components/LoginLandingPage.tsx"),
+  "utf8"
+);
+// Must NOT leak internal permission structures
+assert(!loginLandingPageSource.includes("Role-Based Access Control"), "Must not mention Role-Based Access Control on landing page");
+assert(!loginLandingPageSource.includes("Isolated privilege tiers"), "Must not describe privilege tiers on landing page");
+assert(!loginLandingPageSource.includes("Research Team"), "Must not describe Research Team role on public landing page");
+assert(!loginLandingPageSource.includes("Administrator"), "Must not list Administrator role on public landing page");
+assert(!loginLandingPageSource.includes("HOD"), "Must not list HOD role on public landing page");
+
+// Must contain essential elements
+assert(loginLandingPageSource.includes("EDM Industrial Digital Twin"), "Must display Project Title");
+assert(loginLandingPageSource.includes("Enter Guest Demo"), "Must provide Enter Guest Demo button");
+assert(loginLandingPageSource.includes("Institutional Email"), "Must provide Institutional Email input");
+assert(loginLandingPageSource.includes("Password"), "Must provide Password input");
+assert(loginLandingPageSource.includes("Forgot password?"), "Must provide Forgot password option");
+console.log("✓ Landing page is clean, minimal, and contains zero internal role or RBAC descriptions.");
+
+// -----------------------------------------------------------------------------
+// Test 7: Toolhead Digital Twin Navigation & Guest Access
+// -----------------------------------------------------------------------------
+console.log("\n[Test 7] Verifying Toolhead Digital Twin Guest Access in App.tsx...");
+const appSource = fs.readFileSync(path.resolve("src/app/App.tsx"), "utf8");
+// Both MobileNavDrawer and Sidebar must permit toolhead for canViewDigitalTwin
+assert(appSource.includes('if (item.key === "toolhead") return permissions.canViewDigitalTwin;'), "Toolhead must be accessible via canViewDigitalTwin in navigation");
+assert(appSource.includes('active === "toolhead"'), "Toolhead route must be handled in Dashboard");
+console.log("✓ Toolhead Digital Twin is fully accessible to guests without login.");
+
+// -----------------------------------------------------------------------------
+// Test 8: EDM Machine Information Panel Implementation
+// -----------------------------------------------------------------------------
+console.log("\n[Test 8] Verifying EDM Machine Information Panel Beside 3D Model...");
+assert(fs.existsSync(path.resolve("src/components/EdmMachineInfoPanel.tsx")), "EdmMachineInfoPanel.tsx must exist");
+const infoPanelSource = fs.readFileSync(path.resolve("src/components/EdmMachineInfoPanel.tsx"), "utf8");
+assert(infoPanelSource.includes("About the EDM Machine"), "Must include About the EDM Machine header");
+assert(infoPanelSource.includes("1. Main Components"), "Must include 1. Main Components");
+assert(infoPanelSource.includes("2. How It Works"), "Must include 2. How It Works");
+assert(infoPanelSource.includes("3. Important Parameters"), "Must include 3. Important Parameters");
+assert(infoPanelSource.includes("4. What the Simulation Shows"), "Must include 4. What the Simulation Shows");
+assert(appSource.includes("<EdmMachineInfoPanel"), "App.tsx must render EdmMachineInfoPanel in 3D grid");
+console.log("✓ EDM Machine Information Panel is fully implemented and mounted beside 3D viewer.");
+
+// -----------------------------------------------------------------------------
+// Test 9: Simple Natural English in Guest Demo Metadata
+// -----------------------------------------------------------------------------
+console.log("\n[Test 9] Verifying Natural English Guest Demo Content...");
+assert(
+  PUBLISHED_PROJECT_METADATA.introduction.includes("Welcome to the EDM Digital Twin."),
+  "Must include clear, user-friendly welcome message"
+);
+assert(
+  PUBLISHED_PROJECT_METADATA.introduction.includes("Explore the machine, understand the machining process"),
+  "Must guide the visitor in simple terms"
+);
+console.log("✓ Guest Demo content verified in plain, professional natural English.");
+
+// -----------------------------------------------------------------------------
+// Test 10: Insecure Mock Credential Elimination
+// -----------------------------------------------------------------------------
+console.log("\n[Test 10] Verifying Insecure Mock Credential Elimination in authService...");
+const authServiceSource = fs.readFileSync(path.resolve("src/services/authService.ts"), "utf8");
+assert(!authServiceSource.includes("Admin@EDM2026"), "Hardcoded Admin password must be completely removed");
+assert(!authServiceSource.includes("HOD@RIT2026"), "Hardcoded HOD password must be completely removed");
+assert(!authServiceSource.includes("Research@2026"), "Hardcoded Research password must be completely removed");
+assert(!authServiceSource.includes("admin@edm.local"), "Hardcoded admin email must be completely removed");
+assert(authServiceSource.includes("isSupabaseConfigured"), "Must check for real Supabase configuration");
+console.log("✓ Insecure local mock accounts completely eliminated; real Supabase error guidance enforced.");
+
 console.log("\n================================================================================");
-console.log("ALL 5 AUTHENTICATION & SECURITY VALIDATION TESTS PASSED PERFECTLY!");
+console.log("ALL 10 AUTHENTICATION, SECURITY & UI VALIDATION TESTS PASSED PERFECTLY!");
 console.log("================================================================================");

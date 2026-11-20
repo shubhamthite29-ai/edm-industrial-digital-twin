@@ -3,7 +3,6 @@ import {
   Award,
   CheckCircle2,
   FileText,
-  Lock,
   Sparkles,
 } from "lucide-react";
 import {
@@ -15,48 +14,56 @@ import { StatusPill } from "./StatusPill";
 
 export const GuestDemoShowcase: React.FC = () => {
   return (
-    <div className="space-y-4">
-      {/* Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-plant-cyan/40 bg-plant-cyan/10 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-plant-cyan text-plant-void font-bold">
-            <Sparkles size={20} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-plant-text">
-                Public Demonstration & Research Showcase
-              </h3>
-              <StatusPill label="Guest Demo" tone="cyan" />
+    <div className="space-y-4 font-sans">
+      {/* Welcome & Introduction Banner */}
+      <div className="rounded-lg border border-plant-cyan/40 bg-plant-cyan/10 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-plant-cyan/20 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-plant-cyan text-plant-void font-bold">
+              <Sparkles size={18} />
             </div>
-            <p className="text-xs text-plant-muted">
-              Displaying published benchmark results for Titanium Ti-6Al-4V on ELEKTRA PULS S-50 ZNC.
-            </p>
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-plant-text">
+                Welcome to the EDM Digital Twin
+              </h3>
+              <p className="text-[11px] text-plant-muted">
+                {PUBLISHED_PROJECT_METADATA.institution} &bull; {PUBLISHED_PROJECT_METADATA.department}
+              </p>
+            </div>
           </div>
+          <StatusPill label="Guest Demonstration Mode" tone="cyan" />
         </div>
-        <div className="flex items-center gap-2 text-xs text-plant-muted">
-          <Lock size={14} className="text-plant-amber" />
-          <span>Physical machine writeback & raw datasets restricted to authorized personnel</span>
+
+        <p className="mt-3 text-xs leading-relaxed text-plant-text sm:text-sm">
+          {PUBLISHED_PROJECT_METADATA.introduction}
+        </p>
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-plant-muted font-mono">
+          <span>Target Material: <strong className="text-plant-text font-sans font-semibold">{PUBLISHED_PROJECT_METADATA.targetMaterial}</strong></span>
+          <span>&bull;</span>
+          <span>Machine: <strong className="text-plant-text font-sans font-semibold">{PUBLISHED_PROJECT_METADATA.machine}</strong></span>
+          <span>&bull;</span>
+          <span>Project Guide: <strong className="text-plant-text font-sans font-semibold">{PUBLISHED_PROJECT_METADATA.guide}</strong></span>
         </div>
       </div>
 
       {/* Project Overview Card */}
       <Panel
-        title="Project Overview & Academic Methodology"
-        eyebrow="Rajarambapu Institute of Technology / Mechatronics Engineering"
+        title="Project Overview & Methodology"
+        eyebrow="Rajarambapu Institute of Technology"
         accent="cyan"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-plant-cyan flex items-center gap-1.5">
               <Award size={14} />
-              Key Capstone Achievements
+              Project Objectives & Highlights
             </h4>
             <ul className="space-y-2 text-xs text-plant-muted">
               {PUBLISHED_PROJECT_METADATA.achievements.map((item, idx) => (
                 <li key={idx} className="flex items-start gap-2">
                   <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-plant-green" />
-                  <span>{item}</span>
+                  <span className="leading-relaxed">{item}</span>
                 </li>
               ))}
             </ul>
@@ -65,13 +72,13 @@ export const GuestDemoShowcase: React.FC = () => {
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-plant-cyan flex items-center gap-1.5">
               <FileText size={14} />
-              Research Methodology
+              Experimental Methodology
             </h4>
             <ul className="space-y-2 text-xs text-plant-muted">
               {PUBLISHED_PROJECT_METADATA.methodology.map((item, idx) => (
                 <li key={idx} className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-plant-cyan" />
-                  <span>{item}</span>
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-plant-cyan" />
+                  <span className="leading-relaxed">{item}</span>
                 </li>
               ))}
             </ul>
@@ -81,10 +88,15 @@ export const GuestDemoShowcase: React.FC = () => {
 
       {/* Published Benchmark Table */}
       <Panel
-        title="Published Physical Experimental Benchmarks"
-        eyebrow="Authentic Ti-6Al-4V Validation Cuts (Model vs Laboratory Metrology)"
+        title="Published Physical Experimental Results"
+        eyebrow="Titanium Ti-6Al-4V Validation Cuts (Measured vs Predicted)"
         accent="green"
       >
+        <div className="mb-3 text-xs text-plant-muted">
+          The table below presents curated experimental cuts conducted on the ELEKTRA PULS S-50 ZNC machine.
+          Each cut compares laboratory-measured mass loss with model predictions for Material Removal Rate (MRR)
+          and Tool Wear Rate (TWR).
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left font-mono text-xs">
             <thead>
@@ -105,20 +117,20 @@ export const GuestDemoShowcase: React.FC = () => {
             <tbody className="divide-y divide-plant-line/60">
               {PUBLISHED_DEMO_SAMPLES.map((sample) => (
                 <tr key={sample.sampleId} className="hover:bg-plant-deck/50 transition-colors">
-                  <td className="py-2 px-3 font-semibold text-plant-text">
+                  <td className="py-2.5 px-3 font-semibold text-plant-text font-sans">
                     <div>{sample.conditionName}</div>
-                    <div className="text-[10px] text-plant-muted font-normal">{sample.sampleId}</div>
+                    <div className="text-[10px] text-plant-muted font-mono">{sample.sampleId}</div>
                   </td>
-                  <td className="py-2 px-2 text-plant-cyan">{sample.Ip}</td>
-                  <td className="py-2 px-2 text-plant-cyan">{sample.Vg}</td>
-                  <td className="py-2 px-2 text-plant-cyan">{sample.Ton}</td>
-                  <td className="py-2 px-2 text-plant-cyan">{sample.Toff}</td>
-                  <td className="py-2 px-2 text-plant-text">{sample.publishedMrr.toFixed(4)}</td>
-                  <td className="py-2 px-2 text-plant-green">{sample.predictedMrr.toFixed(4)}</td>
-                  <td className="py-2 px-2 text-plant-green font-bold">{sample.errorMrrPct.toFixed(2)}%</td>
-                  <td className="py-2 px-2 text-plant-text">{sample.publishedTwr.toFixed(4)}</td>
-                  <td className="py-2 px-2 text-plant-amber">{sample.predictedTwr.toFixed(4)}</td>
-                  <td className="py-2 px-2 text-plant-amber font-bold">{sample.errorTwrPct.toFixed(2)}%</td>
+                  <td className="py-2.5 px-2 text-plant-cyan">{sample.Ip}</td>
+                  <td className="py-2.5 px-2 text-plant-cyan">{sample.Vg}</td>
+                  <td className="py-2.5 px-2 text-plant-cyan">{sample.Ton}</td>
+                  <td className="py-2.5 px-2 text-plant-cyan">{sample.Toff}</td>
+                  <td className="py-2.5 px-2 text-plant-text">{sample.publishedMrr.toFixed(4)}</td>
+                  <td className="py-2.5 px-2 text-plant-green">{sample.predictedMrr.toFixed(4)}</td>
+                  <td className="py-2.5 px-2 text-plant-green font-bold">{sample.errorMrrPct.toFixed(2)}%</td>
+                  <td className="py-2.5 px-2 text-plant-text">{sample.publishedTwr.toFixed(4)}</td>
+                  <td className="py-2.5 px-2 text-plant-amber">{sample.predictedTwr.toFixed(4)}</td>
+                  <td className="py-2.5 px-2 text-plant-amber font-bold">{sample.errorTwrPct.toFixed(2)}%</td>
                 </tr>
               ))}
             </tbody>

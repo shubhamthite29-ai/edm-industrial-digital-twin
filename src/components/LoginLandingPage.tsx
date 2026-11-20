@@ -3,15 +3,11 @@ import {
   Boxes,
   Eye,
   EyeOff,
-  KeyRound,
   Lock,
   Mail,
-  ShieldCheck,
   Sparkles,
-  Zap,
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
-import { PUBLISHED_PROJECT_METADATA } from "../data/guest/publishedDemoData";
 
 export const LoginLandingPage: React.FC = () => {
   const { signIn, enterGuestDemo, requestPasswordReset, status, error, clearError } = useAuthStore();
@@ -30,7 +26,7 @@ export const LoginLandingPage: React.FC = () => {
     try {
       await signIn(email, password);
     } catch {
-      // Error message is stored in authStore
+      // Error message is stored and displayed from authStore
     }
   };
 
@@ -49,7 +45,7 @@ export const LoginLandingPage: React.FC = () => {
   };
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col justify-between bg-plant-void text-plant-text">
+    <div className="relative flex min-h-screen w-full flex-col justify-between bg-plant-void font-sans text-plant-text">
       {/* Background industrial grid overlay */}
       <div
         className="pointer-events-none absolute inset-0 opacity-20"
@@ -75,98 +71,45 @@ export const LoginLandingPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="hidden items-center gap-2 text-xs font-mono text-plant-cyan sm:flex">
+        <div className="hidden items-center gap-2 font-mono text-xs text-plant-cyan sm:flex">
           <span className="h-2 w-2 rounded-full bg-plant-green animate-pulse" />
-          <span>ELEKTRA PULS S-50 ZNC Physical Model</span>
+          <span>ELEKTRA PULS S-50 ZNC</span>
         </div>
       </header>
 
-      {/* Main hero & login container */}
-      <main className="relative z-10 mx-auto my-auto flex w-full max-w-5xl flex-col items-center justify-center p-4 py-8 lg:flex-row lg:items-stretch lg:gap-8">
-        {/* Left industrial showcase panel */}
-        <div className="flex w-full flex-col justify-between rounded-xl border border-plant-line bg-plant-deck/90 p-6 shadow-2xl backdrop-blur-md lg:w-7/12 lg:p-8">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-plant-cyan/40 bg-plant-cyan/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-plant-cyan">
-              <Zap size={13} />
-              B.Tech Capstone Project 2025–2026
-            </div>
-            <h1 className="mt-4 text-2xl font-black uppercase tracking-tight text-white sm:text-3xl">
+      {/* Centered minimalist industrial login container */}
+      <main className="relative z-10 mx-auto my-auto flex w-full max-w-md flex-col p-4">
+        <div className="rounded-xl border border-plant-line bg-plant-panel/95 p-6 shadow-2xl backdrop-blur-md sm:p-8">
+          {/* Project Title and single description */}
+          <div className="border-b border-plant-line pb-4 text-center">
+            <h1 className="text-xl font-black uppercase tracking-tight text-white sm:text-2xl">
               EDM Industrial Digital Twin
             </h1>
-            <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-plant-cyan">
-              Smart Manufacturing | Research | Digital Twin Platform
-            </p>
-
-            <p className="mt-4 text-xs leading-relaxed text-plant-muted sm:text-sm">
-              Integrated cyber-physical twin engineered for high-precision micro-machining of aerospace{" "}
-              <strong className="text-plant-text font-semibold">Titanium Alloy Grade 5 (Ti-6Al-4V)</strong>.
-              Featuring validated ensemble ML models, real-time kinematic mirrors, and multi-sensor telemetry fusion.
-            </p>
-
-            {/* Key capabilities pills */}
-            <div className="mt-6 space-y-2.5">
-              <div className="flex items-start gap-2.5 text-xs text-plant-text">
-                <span className="mt-0.5 rounded bg-plant-cyan/20 p-1 text-plant-cyan">
-                  <ShieldCheck size={14} />
-                </span>
-                <span>
-                  <strong>Calibrated Physical ML</strong>: Validated on authentic physical EDM cuts with average error below 5%.
-                </span>
-              </div>
-              <div className="flex items-start gap-2.5 text-xs text-plant-text">
-                <span className="mt-0.5 rounded bg-plant-cyan/20 p-1 text-plant-cyan">
-                  <Sparkles size={14} />
-                </span>
-                <span>
-                  <strong>Unity WebGL 3D Kinematics</strong>: Zero-latency browser-local spatial visualization with spark physics.
-                </span>
-              </div>
-              <div className="flex items-start gap-2.5 text-xs text-plant-text">
-                <span className="mt-0.5 rounded bg-plant-cyan/20 p-1 text-plant-cyan">
-                  <KeyRound size={14} />
-                </span>
-                <span>
-                  <strong>Role-Based Access Control</strong>: Isolated privilege tiers for Administrator, HOD, Research Team, and Guests.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 border-t border-plant-line pt-4 text-[11px] text-plant-muted">
-            <span className="font-semibold text-plant-text">Project Guide:</span> {PUBLISHED_PROJECT_METADATA.guide}
-          </div>
-        </div>
-
-        {/* Right login form panel */}
-        <div className="mt-6 flex w-full flex-col justify-center rounded-xl border border-plant-line bg-plant-panel/95 p-6 shadow-2xl backdrop-blur-md sm:p-8 lg:mt-0 lg:w-5/12">
-          <div className="border-b border-plant-line pb-4">
-            <h2 className="text-lg font-bold uppercase tracking-wide text-white">
-              Institutional Sign In
-            </h2>
-            <p className="text-xs text-plant-muted">
-              Authorized credentials required for machine control & research datasets.
+            <p className="mt-2 text-xs leading-relaxed text-plant-muted">
+              Digital twin platform for Electrical Discharge Machining (EDM) process visualization, parameter monitoring, and experimental performance prediction.
             </p>
           </div>
 
           {error ? (
-            <div className="mt-4 rounded-lg border border-plant-red/50 bg-plant-red/10 p-3 text-xs text-plant-red" role="alert">
+            <div className="mt-4 rounded-lg border border-plant-red/50 bg-plant-red/10 p-3 text-xs text-plant-red leading-relaxed" role="alert">
               {error}
             </div>
           ) : null}
 
+          {/* Login Form */}
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-plant-muted" htmlFor="login-email">
                 Institutional Email
               </label>
               <div className="mt-1.5 flex items-center rounded-lg border border-plant-line bg-plant-void px-3 py-2 focus-within:border-plant-cyan">
-                <Mail size={16} className="text-plant-muted" />
+                <Mail size={16} className="text-plant-muted shrink-0" />
                 <input
                   id="login-email"
                   type="email"
                   autoComplete="email"
                   required
-                  placeholder="admin@edm.local or ritindia.edu"
+                  placeholder="name@ritindia.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="ml-2.5 w-full bg-transparent font-mono text-xs text-plant-text outline-none placeholder:text-plant-muted/60"
@@ -188,7 +131,7 @@ export const LoginLandingPage: React.FC = () => {
                 </button>
               </div>
               <div className="mt-1.5 flex items-center rounded-lg border border-plant-line bg-plant-void px-3 py-2 focus-within:border-plant-cyan">
-                <Lock size={16} className="text-plant-muted" />
+                <Lock size={16} className="text-plant-muted shrink-0" />
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
@@ -221,19 +164,16 @@ export const LoginLandingPage: React.FC = () => {
 
           {/* Guest Demo Section */}
           <div className="mt-6 border-t border-plant-line pt-6">
-            <div className="text-center text-[10px] uppercase tracking-widest text-plant-muted">
-              Public / Academic Evaluation
-            </div>
             <button
               type="button"
               onClick={enterGuestDemo}
-              className="mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-plant-cyan/50 bg-plant-cyan/10 font-bold uppercase tracking-wider text-plant-cyan transition hover:bg-plant-cyan/20 active:scale-[0.99]"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-plant-cyan/50 bg-plant-cyan/10 font-bold uppercase tracking-wider text-plant-cyan transition hover:bg-plant-cyan/20 active:scale-[0.99]"
             >
               <Sparkles size={16} />
               Enter Guest Demo
             </button>
-            <p className="mt-2 text-center text-[10px] text-plant-muted">
-              Instant read-only access to 3D digital twin, published results & methodology. No account required.
+            <p className="mt-2 text-center text-[11px] text-plant-muted leading-relaxed">
+              Instant read-only access to 3D visualizations, toolhead simulation and experimental results. No login required.
             </p>
           </div>
         </div>
@@ -246,12 +186,12 @@ export const LoginLandingPage: React.FC = () => {
             <h3 className="text-base font-bold uppercase tracking-wide text-white">
               Password Recovery
             </h3>
-            <p className="mt-1 text-xs text-plant-muted">
-              Enter your registered institutional email to receive a secure recovery dispatch.
+            <p className="mt-1 text-xs text-plant-muted leading-relaxed">
+              Enter your registered institutional email to receive recovery instructions.
             </p>
 
             {resetMessage ? (
-              <div className="mt-3 rounded border border-plant-cyan/40 bg-plant-cyan/10 p-2.5 text-xs text-plant-cyan">
+              <div className="mt-3 rounded border border-plant-cyan/40 bg-plant-cyan/10 p-2.5 text-xs text-plant-cyan leading-relaxed">
                 {resetMessage}
               </div>
             ) : null}
@@ -267,7 +207,7 @@ export const LoginLandingPage: React.FC = () => {
                   required
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="admin@edm.local"
+                  placeholder="name@ritindia.edu"
                   className="mt-1 h-10 w-full rounded border border-plant-line bg-plant-void px-3 text-xs text-plant-text outline-none focus:border-plant-cyan"
                 />
               </div>
@@ -298,7 +238,7 @@ export const LoginLandingPage: React.FC = () => {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-plant-line/70 bg-plant-deck/60 px-4 py-3 text-center text-[10px] uppercase tracking-wider text-plant-muted">
-        <span>EDM Industrial Digital Twin Platform / React 19 / Mechatronics Engineering</span>
+        <span>EDM Industrial Digital Twin / Department of Mechatronics Engineering</span>
       </footer>
     </div>
   );

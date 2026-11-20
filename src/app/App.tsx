@@ -44,6 +44,7 @@ import { ToolheadDigitalTwin } from "../components/ToolheadDigitalTwin";
 import { PhysicalMachineMlPanel } from "../components/PhysicalMachineMlPanel";
 import { LoginLandingPage } from "../components/LoginLandingPage";
 import { GuestDemoShowcase } from "../components/GuestDemoShowcase";
+import { EdmMachineInfoPanel } from "../components/EdmMachineInfoPanel";
 import { useAuthStore } from "../store/useAuthStore";
 import { roleDisplayLabel } from "../types/auth";
 import { sensors, sensorGroups } from "../data/sensors";
@@ -86,7 +87,7 @@ import type { CameraView, ConnectionStatus, DashboardNotification, DataMode, Mac
 const modules = [
   { key: "dashboard", label: "Overview", icon: Gauge },
   { key: "digital-twin", label: "Digital Twin", icon: Boxes },
-  { key: "toolhead", label: "Toolhead Digital Twin", icon: MoveVertical },
+  { key: "toolhead", label: "Toolhead Simulation", icon: MoveVertical },
   { key: "machine-control", label: "Machine Control", icon: SlidersHorizontal },
   { key: "analytics", label: "Analysis", icon: BarChart3 },
   { key: "predictions", label: "ML Optimization", icon: BrainCircuit },
@@ -289,7 +290,7 @@ function MobileNavDrawer({ active, onClose }: { active: string; onClose: () => v
     return modules.filter((item) => {
       if (item.key === "settings") return permissions.canAccessSettings;
       if (item.key === "machine-control") return permissions.canControlPhysicalMachine;
-      if (item.key === "toolhead") return permissions.canControlPhysicalMachine;
+      if (item.key === "toolhead") return permissions.canViewDigitalTwin;
       if (item.key === "analytics") return permissions.canExportReports;
       return true;
     });
@@ -354,7 +355,7 @@ function Sidebar({ active }: { active: string }) {
     return modules.filter((item) => {
       if (item.key === "settings") return permissions.canAccessSettings;
       if (item.key === "machine-control") return permissions.canControlPhysicalMachine;
-      if (item.key === "toolhead") return permissions.canControlPhysicalMachine;
+      if (item.key === "toolhead") return permissions.canViewDigitalTwin;
       if (item.key === "analytics") return permissions.canExportReports;
       return true;
     });
@@ -2186,9 +2187,11 @@ function Dashboard({ active }: { active: string }) {
     );
   }
 
+  const [adminPanelTab, setAdminPanelTab] = useState<"controls" | "info">("controls");
+
   const overview = active === "dashboard";
   const showTwin = overview || active === "digital-twin" || active === "machine-control";
-  const showToolheadTwin = (overview || active === "digital-twin" || active === "machine-control" || active === "toolhead") && permissions.canControlPhysicalMachine;
+  const showToolheadTwin = overview || active === "digital-twin" || active === "toolhead" || (active === "machine-control" && permissions.canControlPhysicalMachine);
   const showMachineControl = (overview || active === "digital-twin" || active === "machine-control") && permissions.canControlPhysicalMachine;
   const showAnalysis = (overview || active === "analytics") && permissions.canExportReports;
   const showMl = overview || active === "predictions";
@@ -2202,7 +2205,37 @@ function Dashboard({ active }: { active: string }) {
         <section aria-label="Digital Twin and machine control" className="space-y-4">
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
             <MachineView />
-            {permissions.canControlPhysicalMachine ? <LiveCommandPanel /> : null}
+            {permissions.canControlPhysicalMachine ? (
+              <div className="space-y-2">
+                <div className="flex rounded border border-plant-line bg-plant-void p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setAdminPanelTab("controls")}
+                    className={`flex-1 rounded py-1 font-bold uppercase tracking-wider transition ${
+                      adminPanelTab === "controls"
+                        ? "bg-plant-cyan text-plant-void shadow"
+                        : "text-plant-muted hover:text-plant-text"
+                    }`}
+                  >
+                    Live Controls
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminPanelTab("info")}
+                    className={`flex-1 rounded py-1 font-bold uppercase tracking-wider transition ${
+                      adminPanelTab === "info"
+                        ? "bg-plant-cyan text-plant-void shadow"
+                        : "text-plant-muted hover:text-plant-text"
+                    }`}
+                  >
+                    Machine Info
+                  </button>
+                </div>
+                {adminPanelTab === "controls" ? <LiveCommandPanel /> : <EdmMachineInfoPanel />}
+              </div>
+            ) : (
+              <EdmMachineInfoPanel />
+            )}
           </div>
           {showMachineControl ? <MachineControl /> : null}
           {showMachineControl ? <DatasetPanel /> : null}

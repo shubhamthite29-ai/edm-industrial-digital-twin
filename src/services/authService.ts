@@ -21,8 +21,9 @@ function notifyListeners(session: AuthSession | null) {
 
 /**
  * Standardized Authentication Service
- * Seamlessly interfaces with Supabase Auth when configured,
- * while maintaining a robust client-side session and verification layer.
+ * Seamlessly interfaces with Supabase Auth when configured with environment variables,
+ * while maintaining clean client-side session management.
+ * Insecure hardcoded mock credentials have been removed.
  */
 class AuthService {
   private currentSession: AuthSession | null = null;
@@ -63,6 +64,7 @@ class AuthService {
   /**
    * Enter public Guest Demo mode.
    * Creates an unprivileged demonstration session with read-only permissions.
+   * Works immediately without requiring Supabase or external cloud services.
    */
   enterGuestDemo(): AuthSession {
     const guestUser: AuthUser = {
@@ -85,7 +87,8 @@ class AuthService {
   }
 
   /**
-   * Authenticate with email and password.
+   * Authenticate with email and password via Supabase Auth.
+   * No hardcoded local administrator fallbacks are permitted.
    */
   async signIn(email: string, password: string): Promise<AuthSession> {
     const cleanEmail = email.trim().toLowerCase();
@@ -94,100 +97,62 @@ class AuthService {
       throw new Error("Please enter both email and password.");
     }
 
-    // 1. If Supabase is configured in environment, authenticate through Supabase Auth
-    if (this.isSupabaseConfigured()) {
-      try {
-        const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: this.supabaseAnonKey,
-          },
-          body: JSON.stringify({ email: cleanEmail, password }),
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error_description || data.message || "Invalid email or password.");
-        }
-
-        // Fetch user role from public.user_roles
-        const roleResponse = await fetch(`${this.supabaseUrl}/rest/v1/user_roles?user_id=eq.${data.user.id}&select=*`, {
-          headers: {
-            apikey: this.supabaseAnonKey,
-            Authorization: `Bearer ${data.access_token}`,
-          },
-        });
-
-        const roleRows = await roleResponse.json();
-        const roleRecord = roleRows?.[0];
-        const assignedRole: AuthRole = roleRecord?.role ?? "research";
-
-        const session: AuthSession = {
-          token: data.access_token,
-          user: {
-            id: data.user.id,
-            email: data.user.email,
-            displayName: roleRecord?.display_name || data.user.user_metadata?.display_name || cleanEmail.split("@")[0],
-            role: assignedRole,
-            department: roleRecord?.department || "Mechatronics Engineering",
-            lastLogin: new Date().toISOString(),
-          },
-          expiresAt: Date.now() + (data.expires_in ? data.expires_in * 1000 : AUTH_SESSION_DURATION_MS),
-        };
-
-        this.persistSession(session);
-        return session;
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Authentication failed.";
-        throw new Error(message);
-      }
+    if (!this.isSupabaseConfigured()) {
+      throw new Error(
+        "Supabase authentication project is not configured. Institutional login requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Please click 'Enter Guest Demo' for evaluation."
+      );
     }
 
-    // 2. Standalone Provisioned Profiles (For development and testing before cloud linkage)
-    // Supports verified institutional roles
-    const demoAccounts: Record<string, { role: AuthRole; displayName: string; defaultPass: string }> = {
-      "admin@edm.local": {
-        role: "administrator",
-        displayName: "Lead Digital Twin Engineer (Admin)",
-        defaultPass: "Admin@EDM2026",
-      },
-      "hod@ritindia.edu": {
-        role: "hod",
-        displayName: "Dr. Shailesh Shirguppikar (HOD)",
-        defaultPass: "HOD@RIT2026",
-      },
-      "research@ritindia.edu": {
-        role: "research",
-        displayName: "EDM Research Fellow",
-        defaultPass: "Research@2026",
-      },
-    };
+    try {
+      const response = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: this.supabaseAnonKey,
+        },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      });
 
-    const matched = demoAccounts[cleanEmail];
-    if (matched && password === matched.defaultPass) {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error_description || data.message || "Invalid email or password.");
+      }
+
+      // Fetch user role from public.user_roles table via RLS
+      const roleResponse = await fetch(`${this.supabaseUrl}/rest/v1/user_roles?user_id=eq.${data.user.id}&select=*`, {
+        headers: {
+          apikey: this.supabaseAnonKey,
+          Authorization: `Bearer ${data.access_token}`,
+        },
+      });
+
+      const roleRows = await roleResponse.json();
+      const roleRecord = roleRows?.[0];
+      const assignedRole: AuthRole = roleRecord?.role ?? "research";
+
       const session: AuthSession = {
-        token: `local-auth-token-${matched.role}-${Date.now()}`,
+        token: data.access_token,
         user: {
-          id: `local-usr-${matched.role}`,
-          email: cleanEmail,
-          displayName: matched.displayName,
-          role: matched.role,
-          department: "Mechatronics Engineering",
+          id: data.user.id,
+          email: data.user.email,
+          displayName: roleRecord?.display_name || data.user.user_metadata?.display_name || cleanEmail.split("@")[0],
+          role: assignedRole,
+          department: roleRecord?.department || "Mechatronics Engineering",
           lastLogin: new Date().toISOString(),
         },
-        expiresAt: Date.now() + AUTH_SESSION_DURATION_MS,
+        expiresAt: Date.now() + (data.expires_in ? data.expires_in * 1000 : AUTH_SESSION_DURATION_MS),
       };
 
       this.persistSession(session);
       return session;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Authentication failed.";
+      throw new Error(message);
     }
-
-    throw new Error("Invalid email or password. Please verify your credentials or enter as Guest Demo.");
   }
 
   /**
-   * Password reset request.
+   * Password recovery request via Supabase Auth.
    */
   async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
     const cleanEmail = email.trim().toLowerCase();
@@ -195,37 +160,54 @@ class AuthService {
       throw new Error("Please enter your registered institutional email address.");
     }
 
-    if (this.isSupabaseConfigured()) {
-      try {
-        const response = await fetch(`${this.supabaseUrl}/auth/v1/recover`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: this.supabaseAnonKey,
-          },
-          body: JSON.stringify({ email: cleanEmail }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.message || "Password reset request failed.");
-        }
-
-        return {
-          success: true,
-          message: "Password recovery link has been dispatched to your email address.",
-        };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Password reset failed.";
-        throw new Error(msg);
-      }
+    if (!this.isSupabaseConfigured()) {
+      throw new Error("Supabase authentication is not configured. Password recovery requires cloud connection. Please use Guest Demo.");
     }
 
-    // Local simulation response
-    return {
-      success: true,
-      message: `Password reset instructions sent for ${cleanEmail}. Please check your institutional inbox.`,
-    };
+    try {
+      const response = await fetch(`${this.supabaseUrl}/auth/v1/recover`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: this.supabaseAnonKey,
+        },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Password reset request failed.");
+      }
+
+      return {
+        success: true,
+        message: "Password recovery link has been dispatched to your email address.",
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Password reset failed.";
+      throw new Error(msg);
+    }
+  }
+
+  /**
+   * Fetch user list for Administrator and HOD roles.
+   */
+  async listUsers(): Promise<Array<{ user_id: string; role: AuthRole; display_name: string; department: string }>> {
+    if (!this.isSupabaseConfigured()) return [];
+    const session = this.getCurrentSession();
+    if (!session || (session.user.role !== "administrator" && session.user.role !== "hod")) {
+      throw new Error("Unauthorized to view user directory.");
+    }
+
+    const response = await fetch(`${this.supabaseUrl}/rest/v1/user_roles?select=*`, {
+      headers: {
+        apikey: this.supabaseAnonKey,
+        Authorization: `Bearer ${session.token}`,
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to retrieve user directory.");
+    return response.json();
   }
 
   /**

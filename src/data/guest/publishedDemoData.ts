@@ -25,32 +25,35 @@ export interface ProjectMetadata {
   guide: string;
   targetMaterial: string;
   machine: string;
+  introduction: string;
   achievements: string[];
   methodology: string[];
 }
 
 export const PUBLISHED_PROJECT_METADATA: ProjectMetadata = {
-  title: "Design and Development of Digital Twin of Electro Discharge Machining Process",
-  subtitle: "Aerospace Titanium Alloy (Ti-6Al-4V) Precision Machining Digital Twin",
+  title: "EDM Industrial Digital Twin",
+  subtitle: "Digital Representation of Electro Discharge Machining for Aerospace Materials",
   institution: "Rajarambapu Institute of Technology, Rajaramnagar",
   department: "Department of Mechatronics Engineering",
   academicYear: "2025–2026",
   guide: "Dr. Shailesh Shirguppikar",
   targetMaterial: "Titanium Alloy Grade 5 (Ti-6Al-4V)",
   machine: "ELEKTRA PULS S-50 ZNC Industrial EDM",
+  introduction:
+    "Welcome to the EDM Digital Twin. This project presents a digital representation of an Electrical Discharge Machining (EDM) system. It brings together machine visualization, process parameters, experimental results and machine learning-based predictions in one interface. Explore the machine, understand the machining process, view the toolhead simulation and see how different machining parameters affect performance.",
   achievements: [
-    "High-fidelity digital twin integrating Three.js, React 19, and Unity WebGL 3D simulation.",
-    "Validated physical ML ensemble trained on authentic physical experiments with < 5% average error.",
-    "Physics-informed sensor fusion architecture combining thermal, electrical, fluid, and mechanical telemetry.",
-    "Bidirectional parameter synchronization with responsive mobile and desktop engineering controls.",
-    "Decoupled industrial architecture with zero-latency browser-local execution and safe physical gateway boundaries.",
+    "Interactive 3D digital representation of the ELEKTRA PULS S-50 ZNC machine.",
+    "Toolhead Digital Twin simulation demonstrating electrode motion and positioning.",
+    "Validated machine learning model predicting Material Removal Rate (MRR) and Tool Wear Rate (TWR).",
+    "Comprehensive experimental evaluation on aerospace Titanium Alloy (Ti-6Al-4V).",
+    "Clean, responsive interface for process parameter monitoring and analysis.",
   ],
   methodology: [
-    "Systematic design of experiments on authentic ELEKTRA PULS S-50 ZNC machine.",
-    "Multi-objective parameter exploration across discharge current (Ip), gap voltage (Vg), pulse-on time (Ton), and pulse-off time (Toff).",
-    "Precise mass-loss metrology using analytical micro-balances to determine authentic MRR and TWR.",
-    "Ensemble learning and cross-validation preventing synthetic overfitting.",
-    "Real-time synchronized 3D kinematic mirror of toolhead positioning and gap spark dynamics.",
+    "Conduct controlled physical machining experiments on the ELEKTRA PULS S-50 ZNC EDM.",
+    "Systematically vary pulse-on time (Ton), pulse-off time (Toff), current (Ip), and voltage (Vg).",
+    "Measure workpiece and electrode weight changes using high-precision laboratory balances.",
+    "Train and validate predictive regression models to forecast machining outcomes.",
+    "Connect the experimental findings with 3D kinematic visualizations in an interactive dashboard.",
   ],
 };
 
